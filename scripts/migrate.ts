@@ -3,9 +3,10 @@
  * embedded database when DATABASE_URL is unset).
  *   npm run db:migrate
  */
-import { getDb, runMigrations } from "@/lib/db";
+import { describeDatabaseTarget, getDb, runMigrations } from "@/lib/db";
 
 async function main() {
+  console.log(`Database: ${describeDatabaseTarget()}`);
   const db = await getDb();
   const ran = await runMigrations(db, (m) => console.log(m));
   console.log(ran.length ? `Applied ${ran.length} migration(s).` : "Database is up to date.");

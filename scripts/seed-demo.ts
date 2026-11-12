@@ -5,10 +5,11 @@
  * staging/demo deployment.
  *   npm run db:seed-demo
  */
-import { getDb } from "@/lib/db";
+import { describeDatabaseTarget, getDb } from "@/lib/db";
 import { seedDemoQuestions } from "@/lib/db/seed";
 
 async function main() {
+  console.log(`Database: ${describeDatabaseTarget()}`);
   const db = await getDb();
   const n = await seedDemoQuestions(db);
   console.log(`Inserted ${n} demo question(s). They are marked as demo / unverified.`);

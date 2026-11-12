@@ -7,7 +7,7 @@
  * user, with a strong password). Anonymous users can never be admins.
  * Requires DATABASE_URL (a role that can read auth.users, e.g. postgres).
  */
-import { getDb } from "@/lib/db";
+import { describeDatabaseTarget, getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 
 async function main() {
@@ -22,6 +22,7 @@ async function main() {
     console.error("DATABASE_URL is not set. In local mode, sign in to /admin with LOCAL_ADMIN_PASSWORD instead.");
     process.exit(1);
   }
+  console.log(`Database: ${describeDatabaseTarget()}`);
   const db = await getDb();
   const user = await db.one<{ id: string; is_anonymous: boolean }>(
     "select id, coalesce(is_anonymous, false) as is_anonymous from auth.users where lower(email) = $1",

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { appMode, assertDeployable, env } from "@/lib/env";
+import { assertDeployable, env } from "@/lib/env";
 
 /**
  * Minimal database interface shared by production (node-postgres against
@@ -187,8 +187,9 @@ export function getDb(): Promise<Db> {
   if (!globalForDb.__closestWinsDb) {
     assertDeployable();
     globalForDb.__closestWinsDb =
-      appMode() === "supabase"
-        ? createPgDb(env.databaseUrl!)
+      // Any configured database URL wins (scripts run with only DATABASE_URL set).
+      env.databaseUrl
+        ? createPgDb(env.databaseUrl)
         : env.localDbDir === "memory://"
           ? createPgliteDb("memory://").then(async (db) => {
               // Ephemeral database (used by end-to-end tests): seed demo content.
@@ -207,4 +208,17 @@ export function getDb(): Promise<Db> {
 /** Test hook: use a specific database instance. */
 export function setDbForTests(db: Db | undefined): void {
   globalForDb.__closestWinsDb = db ? Promise.resolve(db) : undefined;
+}
+
+/** Human-readable description of which database is in use (no credentials). */
+export function describeDatabaseTarget(): string {
+  if (env.databaseUrl) {
+    try {
+      const u = new URL(env.databaseUrl);
+      return `Postgres at ${u.hostname}:${u.port || "5432"} (user ${decodeURIComponent(u.username)})`;
+    } catch {
+      return "Postgres (DATABASE_URL could not be parsed)";
+    }
+  }
+  return `LOCAL embedded database at ${env.localDbDir} (DATABASE_URL is not set)`;
 }
