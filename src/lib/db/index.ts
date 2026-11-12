@@ -56,7 +56,7 @@ async function createPgDb(connectionString: string): Promise<Db> {
   const ca = env.databaseCaCert?.replace(/\\n/g, "\n");
   const pool = new Pool({
     connectionString: url.toString(),
-    max: Number(process.env.DATABASE_POOL_MAX ?? 3),
+    max: Number(process.env.DATABASE_POOL_MAX ?? 1),
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,
     ssl: isLocalHost ? undefined : ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: false },

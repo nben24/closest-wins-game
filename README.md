@@ -40,6 +40,8 @@ npm run check       # lint + typecheck + tests + production build
 
 ## Deploying (Supabase + Vercel)
 
+**Step-by-step guide with exact click paths for every value: [docs/SETUP.md](docs/SETUP.md).** Summary below.
+
 ### 1. Supabase
 
 1. Create a project at supabase.com.
