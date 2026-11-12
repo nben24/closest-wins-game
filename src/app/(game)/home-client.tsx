@@ -74,11 +74,6 @@ function Today({ name }: { name: string }) {
           <h1 id="today-heading" className="title relative mt-1 font-display text-5xl font-extrabold tracking-tight text-sun">
             Challenge #{ch.number}
           </h1>
-          {ch.isDemo && (
-            <p className="relative mt-2 inline-block rounded-full bg-plum-soft px-3 py-1 text-sm font-bold text-plum">
-              Demo questions · not verified
-            </p>
-          )}
           {!a && (
             <>
               <p className="relative mt-3 text-lg text-ink-soft">Five questions. Closest guess wins.</p>

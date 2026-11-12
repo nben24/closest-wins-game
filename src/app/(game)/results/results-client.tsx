@@ -75,7 +75,6 @@ export function ResultsClient() {
             {formatPoints(data.attempt.totalScore)}
           </h1>
           <p className="text-lg font-semibold text-ink-soft">out of {formatPoints(data.attempt.maxScore)}</p>
-          {data.challenge.isDemo && <p className="mt-2 inline-block rounded-full bg-plum-soft px-3 py-1 text-sm font-bold text-plum">Demo questions · not verified</p>}
           {!completed && (
             <p className="mt-3 text-lg">
               You&apos;ve finished {data.attempt.roundsFinished} of 5. <Link href="/play" className="font-bold text-coral underline">Keep going</Link>

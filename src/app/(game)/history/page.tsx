@@ -56,7 +56,6 @@ export default function HistoryPage() {
                 <Link href={`/results?date=${r.date}`} className="flex min-h-14 items-center justify-between py-3">
                   <span>
                     <span className="block text-lg font-bold">#{r.number} · {formatGameDate(r.date, { weekday: "short", month: "short", day: "numeric" })}</span>
-                    {r.isDemo && <span className="text-sm text-plum">demo</span>}
                   </span>
                   <span className="font-display text-xl font-extrabold tabular-nums">
                     {r.status === "completed" ? formatPoints(r.total) : "unfinished"}

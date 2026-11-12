@@ -81,7 +81,8 @@ export function RevealPanel({ data, isDemo, position }: { data: RevealData; isDe
           {data.referencePeriod && <p>Reference period: {data.referencePeriod}</p>}
           {data.sourceUrl && (
             <p>
-              {isDemo ? "Reference (demo, not verified): " : "Source: "}
+              {/* Demo questions' links were never verified, so don't call them a source. */}
+              {isDemo ? "Learn more: " : "Source: "}
               <a href={data.sourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="font-semibold text-sky underline underline-offset-2">
                 {data.sourceTitle || new URL(data.sourceUrl).hostname}
               </a>
