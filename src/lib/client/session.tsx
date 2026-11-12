@@ -38,7 +38,10 @@ export async function ensureIdentity(): Promise<void> {
     const { data } = await supabase.auth.getSession();
     if (data.session) return;
     const { error } = await supabase.auth.signInAnonymously();
-    if (error) throw new Error("Couldn't start a guest session. Please try again.");
+    if (error) {
+      console.error("Supabase anonymous sign-in failed:", error);
+      throw new Error(`Couldn't start a guest session (${error.message || "unknown error"}).`);
+    }
     return;
   }
   await api("/api/session", { method: "POST", body: {} });
