@@ -1,26 +1,97 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Closest Wins visual identity: warm paper, deep plum ink, a tangerine
+ * accent, and a "needle on a number line" motif. All text/background pairs
+ * used for content meet WCAG AA contrast.
+ */
+@theme {
+  --color-paper: #fff6e9;
+  --color-card: #fffdf8;
+  --color-ink: #2a1f3d;
+  --color-ink-soft: #5b4d6e;
+  --color-line: #eaddc9;
+  --color-coral: #d23f1b;
+  --color-coral-soft: #ffe1d6;
+  --color-sun: #ffc94a;
+  --color-sun-soft: #fff1c7;
+  --color-mint: #12715f;
+  --color-mint-soft: #d5f3ea;
+  --color-sky: #2563b8;
+  --color-sky-soft: #dceaff;
+  --color-plum: #5b3fc4;
+  --color-plum-soft: #e9e2ff;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --radius-card: 1.5rem;
+
+  --animate-pop: pop 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  --animate-rise: rise 420ms ease-out both;
+
+  @keyframes pop {
+    0% { transform: scale(0.85); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes rise {
+    0% { transform: translateY(12px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
   }
 }
 
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(circle at 10% -10%, #ffe7c7 0, transparent 40%),
+    radial-gradient(circle at 110% 10%, #ffe0d4 0, transparent 35%),
+    var(--color-paper);
+  background-attachment: fixed;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-plum);
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@utility btn {
+  @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 py-3 text-lg font-bold transition select-none disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn bg-coral text-white shadow-[0_4px_0_#8f2a10] active:translate-y-[2px] active:shadow-[0_2px_0_#8f2a10];
+}
+@utility btn-ink {
+  @apply btn bg-ink text-paper shadow-[0_4px_0_#120c1c] active:translate-y-[2px] active:shadow-[0_2px_0_#120c1c];
+}
+@utility btn-soft {
+  @apply btn border-2 border-line bg-card text-ink hover:border-ink-soft;
+}
+@utility btn-ghost {
+  @apply btn min-h-11 px-3 text-base text-ink-soft underline-offset-4 hover:underline;
+}
+@utility card {
+  @apply rounded-[var(--radius-card)] border-2 border-line bg-card shadow-[0_6px_0_#efe1cc];
+}
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full border border-line bg-paper px-3 py-1 text-sm font-semibold text-ink-soft;
+}
+@utility label {
+  @apply text-sm font-bold tracking-wide text-ink-soft uppercase;
 }

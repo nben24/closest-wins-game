@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+
+# local embedded database (PGlite) and test artifacts
+/.data
+/test-results
+/playwright-report
+/e2e/.auth
