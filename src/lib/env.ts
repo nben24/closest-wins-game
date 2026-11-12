@@ -75,3 +75,24 @@ export function assertDeployable(): void {
     throw new ConfigError("DATABASE_URL (or POSTGRES_URL from the Supabase integration) is required when Supabase is configured.");
   }
 }
+
+/** Which settings the running server can see — presence only, never values. */
+export function configReport(): { name: string; present: boolean; note?: string }[] {
+  const has = (k: string) => Boolean(process.env[k]?.trim());
+  return [
+    { name: "NEXT_PUBLIC_SUPABASE_URL", present: has("NEXT_PUBLIC_SUPABASE_URL") },
+    { name: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", present: has("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") || has("NEXT_PUBLIC_SUPABASE_ANON_KEY") },
+    { name: "DATABASE_URL", present: has("DATABASE_URL"), note: has("DATABASE_URL") ? undefined : has("POSTGRES_URL") ? "using POSTGRES_URL instead" : undefined },
+    { name: "CRON_SECRET", present: has("CRON_SECRET") },
+    { name: "ANTHROPIC_API_KEY", present: has("ANTHROPIC_API_KEY"), note: `model: ${env.anthropicModel}` },
+    { name: "ALLOW_DEMO_CONTENT", present: has("ALLOW_DEMO_CONTENT"), note: `demo questions ${env.allowDemoContent ? "allowed" : "not allowed"}` },
+  ];
+}
+
+/** Which code version is running (Vercel system variables). */
+export function deploymentInfo(): string {
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7);
+  const msg = process.env.VERCEL_GIT_COMMIT_MESSAGE?.split("\n")[0];
+  const envName = process.env.VERCEL_ENV;
+  return sha ? `${envName ?? "vercel"} · commit ${sha}${msg ? ` — ${msg}` : ""}` : "local";
+}

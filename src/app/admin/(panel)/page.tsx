@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { resolveNotificationAction } from "@/app/admin/actions";
 import { Badge, Panel, Stat } from "@/components/admin/ui";
-import { appMode, env } from "@/lib/env";
+import { appMode, configReport, deploymentInfo, env } from "@/lib/env";
 import { formatGameDate } from "@/lib/time";
 import { listChallenges, openNotifications, participationStats } from "@/lib/server/admin/ops";
 import { getSettings } from "@/lib/server/admin/settings";
@@ -84,6 +84,18 @@ export default async function Dashboard() {
           {Object.entries(inv.byCategory).map(([k, n]) => <span key={k} className="chip">{k}: {n}</span>)}
           {Object.entries(inv.byDifficulty).map(([k, n]) => <span key={k} className="chip">{k}: {n}</span>)}
         </div>
+      </Panel>
+      <Panel title="Configuration (what this deployment can see)">
+        <ul className="grid gap-1 text-sm sm:grid-cols-2">
+          {configReport().map((c) => (
+            <li key={c.name}>
+              <span className={c.present ? "font-bold text-mint" : "font-bold text-coral"}>{c.present ? "✓ set" : "✗ missing"}</span>{" "}
+              <code>{c.name}</code>
+              {c.note && <span className="text-ink-soft"> — {c.note}</span>}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-xs text-ink-soft">Running: {deploymentInfo()}. Variables added after this deployment was built need a redeploy.</p>
       </Panel>
       <p className="text-sm text-ink-soft">
         AI: {ai.configured ? `${ai.provider} · ${ai.model}` : "not configured"} · This month (estimated): ${usage.costUsd.toFixed(2)} of ${settings.monthlyCostLimitUsd} ·{" "}
