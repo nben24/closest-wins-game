@@ -208,6 +208,11 @@ export interface ScoreBand {
   shareSymbol: string;
 }
 
+/** True when a round deserves the green "nailed it" treatment (a Bullseye). */
+export function isHit(points: number, answered = true, voided = false): boolean {
+  return scoreBand(points, answered, voided).key === "bullseye";
+}
+
 export function scoreBand(points: number, answered = true, voided = false): ScoreBand {
   if (voided) return { key: "none", label: "Not counted", symbol: "–", shareSymbol: "➖" };
   if (!answered) return { key: "none", label: "No answer", symbol: "·", shareSymbol: "⚪" };

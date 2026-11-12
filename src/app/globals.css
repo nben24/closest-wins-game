@@ -36,6 +36,11 @@
   --color-key-shadow: #e6d6bf;
   --color-answer: #2a1f3d;
   --color-answer-fg: #fff6e9;
+  /* "You nailed it" (Bullseye) highlight */
+  --color-hit: #157a43;
+  --color-hit-fg: #ffffff;
+  --color-hit-soft: #d8f5e3;
+  --color-hit-glow: rgb(21 122 67 / 0.35);
 
   --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
@@ -150,6 +155,10 @@ body {
   --color-key-shadow: #0b0d2a;
   --color-answer: #ff3d7f;
   --color-answer-fg: #ffffff;
+  --color-hit: #2fe08a;
+  --color-hit-fg: #0c2b1d;
+  --color-hit-soft: #0f3a2c;
+  --color-hit-glow: rgb(47 224 138 / 0.55);
 
   --font-display: var(--font-anton), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;

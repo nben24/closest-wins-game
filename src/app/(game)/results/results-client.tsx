@@ -13,6 +13,7 @@ import { GAME_TITLE } from "@/config/game";
 import { api } from "@/lib/client/api";
 import { useSession } from "@/lib/client/session";
 import { formatPoints, formatValue } from "@/lib/format";
+import { isHit } from "@/lib/scoring";
 import { buildNumberLine, questionInsight } from "@/lib/insights";
 import { buildShareText } from "@/lib/share";
 import { formatGameDate } from "@/lib/time";
@@ -92,10 +93,15 @@ export function ResultsClient() {
         <section className="card p-5" aria-labelledby="breakdown-heading">
           <h2 id="breakdown-heading" className="font-display text-xl font-extrabold">Your five</h2>
           <ol className="mt-3 space-y-2">
-            {data.rounds.map((r) => (
-              <li key={r.position} className="flex items-center justify-between gap-3 rounded-xl bg-paper px-3 py-2">
+            {data.rounds.map((r) => {
+              const hit = isHit(r.reveal!.score, r.reveal!.guess !== null, r.reveal!.voided);
+              return (
+              <li
+                key={r.position}
+                className={`flex items-center justify-between gap-3 rounded-xl border-2 px-3 py-2 ${hit ? "border-hit bg-hit-soft" : "border-transparent bg-paper"}`}
+              >
                 <span className="min-w-0">
-                  <span className="block text-sm font-bold text-ink-soft">Q{r.position}</span>
+                  <span className={`block text-sm font-bold ${hit ? "text-hit" : "text-ink-soft"}`}>Q{r.position}{hit ? " · Nailed it" : ""}</span>
                   <span className="block truncate text-base">{r.prompt}</span>
                   <span className="block text-sm text-ink-soft">
                     Answer <strong className="text-ink">{formatValue(r.reveal!.answer, r.scoringType)}{r.unit ? ` ${r.unit}` : ""}</strong>
@@ -103,11 +109,12 @@ export function ResultsClient() {
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1">
-                  <span className="font-display text-xl font-extrabold tabular-nums">{r.reveal!.voided ? "—" : formatPoints(r.reveal!.score)}</span>
+                  <span className={`font-display text-xl font-extrabold tabular-nums ${hit ? "text-hit" : ""}`}>{r.reveal!.voided ? "—" : formatPoints(r.reveal!.score)}</span>
                   <ScoreBadge size="sm" points={r.reveal!.score} answered={r.reveal!.guess !== null} voided={r.reveal!.voided} />
                 </span>
               </li>
-            ))}
+              );
+            })}
           </ol>
           {best && (
             <p className="mt-3 rounded-xl bg-sun-soft p-3 text-base">

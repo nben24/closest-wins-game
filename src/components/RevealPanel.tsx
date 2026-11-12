@@ -2,7 +2,7 @@
 
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { describeMiss, formatPoints, formatValue, formatWords } from "@/lib/format";
-import type { ScoringType } from "@/lib/scoring";
+import { isHit, type ScoringType } from "@/lib/scoring";
 
 export interface RevealData {
   prompt: string;
@@ -28,6 +28,8 @@ export function RevealPanel({ data, isDemo, position }: { data: RevealData; isDe
   const answered = data.guess !== null;
   const unit = data.unit ? ` ${data.unit}` : "";
   const words = data.scoringType !== "year" ? formatWords(data.answer) : null;
+  // A Bullseye turns the answer box green so a great guess actually stands out.
+  const hit = isHit(data.score, answered, data.voided);
   return (
     <section className="card animate-rise overflow-hidden" aria-labelledby={position ? `reveal-${position}` : undefined}>
       <div className="px-5 pt-4">
@@ -37,7 +39,18 @@ export function RevealPanel({ data, isDemo, position }: { data: RevealData; isDe
         </h2>
       </div>
 
-      <div className="mx-4 mt-3 rounded-2xl bg-answer px-4 py-4 text-center text-answer-fg">
+      <div
+        className={`mx-4 rounded-2xl px-4 py-4 text-center ${
+          hit
+            ? "mt-4 bg-hit text-hit-fg shadow-[0_0_0_3px_var(--color-card),0_0_0_6px_var(--color-hit),0_0_24px_var(--color-hit-glow)]"
+            : "mt-3 bg-answer text-answer-fg"
+        }`}
+      >
+        {hit && (
+          <p className="mb-1.5 inline-block animate-pop rounded-full bg-hit-fg px-3 py-0.5 font-display text-sm tracking-widest text-hit uppercase">
+            <span aria-hidden="true">◎ </span>Nailed it
+          </p>
+        )}
         <p className="text-sm font-bold tracking-wider uppercase opacity-90">The answer</p>
         <p className="mt-1 animate-pop font-display text-5xl leading-none font-extrabold tabular-nums">
           {formatValue(data.answer, data.scoringType)}
@@ -50,11 +63,11 @@ export function RevealPanel({ data, isDemo, position }: { data: RevealData; isDe
         <div className="flex items-baseline justify-between gap-3">
           <div>
             <p className="label">Your guess</p>
-            <p className="font-display text-3xl font-extrabold tabular-nums">
+            <p className={`font-display text-3xl font-extrabold tabular-nums ${hit ? "text-hit" : ""}`}>
               {answered ? `${formatValue(data.guess!, data.scoringType)}${unit}` : "—"}
             </p>
           </div>
-          <p className="text-right text-base font-semibold text-ink-soft">
+          <p className={`text-right text-base ${hit ? "font-extrabold text-hit" : "font-semibold text-ink-soft"}`}>
             {answered
               ? describeMiss(data.scoringType, data.answer, data.guess!, data.unit)
               : data.status === "timed_out"
