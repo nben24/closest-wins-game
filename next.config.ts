@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   // Database drivers must run as regular Node modules, not bundled.
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
   poweredByHeader: false,
+  // The link-preview image reads its font from disk at build/run time.
+  outputFileTracingIncludes: { "/opengraph-image": ["./assets/fonts/**"], "/twitter-image": ["./assets/fonts/**"] },
   async headers() {
     return [
       {
