@@ -46,11 +46,15 @@ export function HomeClient() {
 function Today({ name }: { name: string }) {
   const [state, setState] = useState<StateLite | null>(null);
   const [groups, setGroups] = useState<GroupLite[] | null>(null);
+  const [rank, setRank] = useState<{ rank: number; of: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     api<StateLite>("/api/play/state").then(setState).catch((e) => setErr(e.message));
     api<{ groups: GroupLite[] }>("/api/groups").then((r) => setGroups(r.groups)).catch(() => setGroups([]));
+    api<{ board: { totalPlayers: number; me: { rank: number } | null } }>("/api/leaderboard?scope=day")
+      .then((r) => r.board.me && setRank({ rank: r.board.me.rank, of: r.board.totalPlayers }))
+      .catch(() => {});
   }, []);
   const countdown = useCountdown(state ? nextGameDayStart(new Date(state.serverNow)) : null);
 
@@ -99,6 +103,12 @@ function Today({ name }: { name: string }) {
                 {formatPoints(a.totalScore)}
                 <span className="text-xl text-ink-soft"> / {formatPoints(MAX_POINTS_PER_DAY)}</span>
               </p>
+              {rank && (
+                <p className="relative mt-1 text-lg">
+                  <strong className="text-sun">#{rank.rank}</strong> of {rank.of} today ·{" "}
+                  <Link href="/leaderboard" className="font-bold underline underline-offset-2">Leaderboard</Link>
+                </p>
+              )}
               <Link href="/results" className="btn-primary relative mt-5 w-full text-xl">
                 See results & share
               </Link>

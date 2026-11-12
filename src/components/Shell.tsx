@@ -9,6 +9,7 @@ import { useSession } from "@/lib/client/session";
 
 const NAV = [
   { href: "/", label: "Today" },
+  { href: "/leaderboard", label: "Ranks" },
   { href: "/groups", label: "Groups" },
   { href: "/history", label: "History" },
 ];
@@ -38,7 +39,7 @@ export function Shell({ children, wide = false, hideNav = false, compact = false
                   key={n.href}
                   href={n.href}
                   aria-current={active ? "page" : undefined}
-                  className={`min-h-11 flex-1 rounded-xl px-3 py-2 text-center text-base font-bold ${
+                  className={`min-h-11 flex-1 rounded-xl px-1 py-2 text-center text-base font-bold ${
                     active ? "bg-primary text-primary-fg" : "text-ink-soft hover:bg-card"
                   }`}
                 >

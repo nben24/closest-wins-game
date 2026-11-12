@@ -80,6 +80,12 @@ export function ResultsClient() {
               You&apos;ve finished {data.attempt.roundsFinished} of 5. <Link href="/play" className="font-bold text-coral underline">Keep going</Link>
             </p>
           )}
+          {completed && data.everyone?.rank && (
+            <p className="mt-3 text-lg">
+              You&apos;re <strong className="text-sun">#{data.everyone.rank}</strong> of {data.everyone.players} player{data.everyone.players === 1 ? "" : "s"} today ·{" "}
+              <Link href="/leaderboard" className="font-bold underline underline-offset-2">Leaderboard</Link>
+            </p>
+          )}
           {completed && shareText && <div className="mt-5"><ShareButton text={shareText} /></div>}
         </section>
 
@@ -111,11 +117,9 @@ export function ResultsClient() {
         </section>
 
         {completed && data.groups && data.groups.length === 0 && (
-          <section className="card p-5 text-center">
-            <h2 className="font-display text-xl font-extrabold">Compare with friends</h2>
-            <p className="mt-1 text-base text-ink-soft">Create a private group and send the invite to your group chat.</p>
-            <Link href="/groups" className="btn-soft mt-3">Start a group</Link>
-          </section>
+          <p className="text-center text-base text-ink-soft">
+            Want a private league with family or friends? <Link href="/groups" className="font-bold underline underline-offset-2">Start a group</Link>
+          </p>
         )}
 
         {group && (
@@ -154,9 +158,21 @@ export function ResultsClient() {
           const config = { type: r.scoringType, tolerance: r.reveal!.tolerance };
           const line = guesses.length >= 2 ? buildNumberLine(config, r.reveal!.answer, guesses) : null;
           const insight = guesses.length >= 2 ? questionInsight(config, r.reveal!.answer, guesses) : null;
+          const all = data.everyone?.questions.find((q) => q.position === r.position);
           return (
             <div key={r.position} className="space-y-2">
               <RevealPanel position={r.position} isDemo={data.challenge.isDemo} data={{ ...r.reveal!, prompt: r.prompt, unit: r.unit, scoringType: r.scoringType, status: r.status }} />
+              {all && all.median !== null && !r.reveal!.voided && (
+                <div className="card p-4">
+                  <p className="label">Everyone · {all.submitted} guesses</p>
+                  <p className="mt-1 text-base">
+                    Middle guess <strong>{formatValue(all.median, r.scoringType)}{r.unit ? ` ${r.unit}` : ""}</strong> · {all.lowerPct}% too low · {all.higherPct}% too high
+                  </p>
+                  {all.beatPct !== null && (
+                    <p className="mt-1 font-display text-xl text-sun">You were closer than {all.beatPct}% of players</p>
+                  )}
+                </div>
+              )}
               {line && insight && !r.reveal!.voided && (
                 <div className="card p-4">
                   <p className="text-base font-semibold">
