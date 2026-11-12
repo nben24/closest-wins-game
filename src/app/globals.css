@@ -22,6 +22,21 @@
   --color-plum: #5b3fc4;
   --color-plum-soft: #e9e2ff;
 
+  /* Semantic roles (light defaults; the player theme overrides them below) */
+  --color-primary: #d23f1b;
+  --color-primary-fg: #ffffff;
+  --color-primary-shadow: #8f2a10;
+  --color-secondary: #2a1f3d;
+  --color-secondary-fg: #fff6e9;
+  --color-secondary-shadow: #120c1c;
+  --color-card-shadow: #efe1cc;
+  --color-key: #fffdf8;
+  --color-key-fg: #2a1f3d;
+  --color-key-border: #eaddc9;
+  --color-key-shadow: #e6d6bf;
+  --color-answer: #2a1f3d;
+  --color-answer-fg: #fff6e9;
+
   --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
 
@@ -75,10 +90,10 @@ body {
   @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 py-3 text-lg font-bold transition select-none disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-coral text-white shadow-[0_4px_0_#8f2a10] active:translate-y-[2px] active:shadow-[0_2px_0_#8f2a10];
+  @apply btn bg-primary text-primary-fg shadow-[0_4px_0_var(--color-primary-shadow)] active:translate-y-[2px] active:shadow-[0_2px_0_var(--color-primary-shadow)];
 }
 @utility btn-ink {
-  @apply btn bg-ink text-paper shadow-[0_4px_0_#120c1c] active:translate-y-[2px] active:shadow-[0_2px_0_#120c1c];
+  @apply btn bg-secondary text-secondary-fg shadow-[0_4px_0_var(--color-secondary-shadow)] active:translate-y-[2px] active:shadow-[0_2px_0_var(--color-secondary-shadow)];
 }
 @utility btn-soft {
   @apply btn border-2 border-line bg-card text-ink hover:border-ink-soft;
@@ -87,11 +102,88 @@ body {
   @apply btn min-h-11 px-3 text-base text-ink-soft underline-offset-4 hover:underline;
 }
 @utility card {
-  @apply rounded-[var(--radius-card)] border-2 border-line bg-card shadow-[0_6px_0_#efe1cc];
+  @apply rounded-[var(--radius-card)] border-2 border-line bg-card shadow-[0_6px_0_var(--color-card-shadow)];
 }
 @utility chip {
   @apply inline-flex items-center gap-1 rounded-full border border-line bg-paper px-3 py-1 text-sm font-semibold text-ink-soft;
 }
 @utility label {
   @apply text-sm font-bold tracking-wide text-ink-soft uppercase;
+}
+@utility key {
+  @apply rounded-2xl border-2 border-key-border bg-key font-bold text-key-fg shadow-[0_3px_0_var(--color-key-shadow)] active:translate-y-[2px] active:shadow-none disabled:opacity-40;
+}
+
+/* ===================================================================
+ * Player theme: "Game-show night"
+ * Deep navy stage, electric yellow primary, hot pink secondary, teal
+ * success. Applied to player screens only (admin keeps the light theme).
+ * All text/background pairs used for content meet WCAG AA.
+ * =================================================================== */
+.theme-gameshow {
+  --color-paper: #12153d;
+  --color-card: #1d2260;
+  --color-ink: #ffffff;
+  --color-ink-soft: #c3c7ef;
+  --color-line: #363d99;
+  --color-coral: #ff5c93;
+  --color-coral-soft: #4a1d55;
+  --color-sun: #ffd23f;
+  --color-sun-soft: #3d3619;
+  --color-mint: #3ddbd9;
+  --color-mint-soft: #123f5c;
+  --color-sky: #8db8ff;
+  --color-sky-soft: #1f2f70;
+  --color-plum: #cdb0ff;
+  --color-plum-soft: #2f2770;
+
+  --color-primary: #ffd23f;
+  --color-primary-fg: #12153d;
+  --color-primary-shadow: #b8890a;
+  --color-secondary: #ff3d7f;
+  --color-secondary-fg: #ffffff;
+  --color-secondary-shadow: #a61647;
+  --color-card-shadow: #0b0d2a;
+  --color-key: #272d7c;
+  --color-key-fg: #ffffff;
+  --color-key-border: #272d7c;
+  --color-key-shadow: #0b0d2a;
+  --color-answer: #ff3d7f;
+  --color-answer-fg: #ffffff;
+
+  --font-display: var(--font-anton), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+
+  min-height: 100dvh;
+  color-scheme: dark;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  background: radial-gradient(circle at 50% -15%, #2b3190 0, #12153d 55%) fixed, #12153d;
+}
+html:has(.theme-gameshow), body:has(.theme-gameshow) {
+  background: #12153d;
+}
+/* Anton has a single weight: never fake-bold it. */
+.theme-gameshow .font-display {
+  font-weight: 400;
+  letter-spacing: 0.015em;
+}
+.theme-gameshow .title {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.theme-gameshow :is(.btn-primary, .btn-ink) {
+  font-family: var(--font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.theme-gameshow .label {
+  color: #ff9ec0;
+}
+.theme-gameshow :focus-visible {
+  outline-color: #ffd23f;
+}
+.theme-gameshow .wordmark {
+  color: var(--color-sun);
 }

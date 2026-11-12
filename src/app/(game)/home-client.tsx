@@ -70,9 +70,8 @@ function Today({ name }: { name: string }) {
         </CenterMessage>
       ) : (
         <section className="card relative overflow-hidden p-6" aria-labelledby="today-heading">
-          <div aria-hidden="true" className="absolute -top-10 -right-10 h-36 w-36 rounded-full bg-sun/40" />
           <p className="label relative">{formatGameDate(ch.date, { weekday: "long", month: "long", day: "numeric" })}</p>
-          <h1 id="today-heading" className="relative mt-1 font-display text-4xl font-extrabold tracking-tight">
+          <h1 id="today-heading" className="title relative mt-1 font-display text-5xl font-extrabold tracking-tight text-sun">
             Challenge #{ch.number}
           </h1>
           {ch.isDemo && (
@@ -116,7 +115,7 @@ function Today({ name }: { name: string }) {
 
       <section className="card p-5" aria-labelledby="groups-heading">
         <div className="flex items-center justify-between">
-          <h2 id="groups-heading" className="font-display text-xl font-extrabold">Your groups</h2>
+          <h2 id="groups-heading" className="title font-display text-xl font-extrabold">Your groups</h2>
           <Link href="/groups" className="btn-ghost">Manage</Link>
         </div>
         {groups === null ? null : groups.length === 0 ? (

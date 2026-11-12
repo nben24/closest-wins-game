@@ -117,7 +117,7 @@ export function Onboarding() {
     <div className="space-y-6">
       <div className="text-center">
         <LogoMark className="mx-auto h-16 w-16" />
-        <h1 className="mt-3 font-display text-4xl font-extrabold tracking-tight">{GAME_TITLE}</h1>
+        <h1 className="title mt-3 font-display text-5xl font-extrabold tracking-tight text-sun">{GAME_TITLE}</h1>
         <p className="mt-2 text-xl text-ink-soft">{GAME_TAGLINE}</p>
       </div>
       <ol className="card grid gap-3 p-5 text-lg">
@@ -131,7 +131,7 @@ export function Onboarding() {
           <span aria-hidden="true">🎯</span> No need to be exact — closer earns more, up to 1,000 points.
         </li>
       </ol>
-      <h2 className="font-display text-2xl font-extrabold">Pick your player</h2>
+      <h2 className="title font-display text-2xl font-extrabold">Pick your player</h2>
       <IdentityPicker onDone={setMe} cta="Let's play" />
       <p className="text-center text-sm text-ink-soft">
         No email or password. Your history is saved on this browser only.

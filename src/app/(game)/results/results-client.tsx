@@ -71,7 +71,7 @@ export function ResultsClient() {
       <div className="space-y-5">
         <section className="card p-6 text-center" aria-labelledby="results-heading">
           <p className="label">{GAME_TITLE} #{data.challenge.number} · {formatGameDate(data.challenge.date)}</p>
-          <h1 id="results-heading" className="mt-2 font-display text-6xl font-extrabold tabular-nums animate-pop">
+          <h1 id="results-heading" className="mt-2 font-display text-7xl font-extrabold tabular-nums text-sun animate-pop">
             {formatPoints(data.attempt.totalScore)}
           </h1>
           <p className="text-lg font-semibold text-ink-soft">out of {formatPoints(data.attempt.maxScore)}</p>
@@ -92,6 +92,10 @@ export function ResultsClient() {
                 <span className="min-w-0">
                   <span className="block text-sm font-bold text-ink-soft">Q{r.position}</span>
                   <span className="block truncate text-base">{r.prompt}</span>
+                  <span className="block text-sm text-ink-soft">
+                    Answer <strong className="text-ink">{formatValue(r.reveal!.answer, r.scoringType)}{r.unit ? ` ${r.unit}` : ""}</strong>
+                    {" · "}You {r.reveal!.guess !== null ? <strong className="text-ink">{formatValue(r.reveal!.guess, r.scoringType)}</strong> : "—"}
+                  </span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1">
                   <span className="font-display text-xl font-extrabold tabular-nums">{r.reveal!.voided ? "—" : formatPoints(r.reveal!.score)}</span>

@@ -1,7 +1,7 @@
 import { scoreBand } from "@/lib/scoring";
 
 const STYLES: Record<string, string> = {
-  bullseye: "bg-sun text-ink",
+  bullseye: "bg-primary text-primary-fg",
   close: "bg-mint-soft text-mint",
   warm: "bg-sun-soft text-ink",
   ballpark: "bg-coral-soft text-coral",

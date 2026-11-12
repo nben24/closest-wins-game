@@ -62,7 +62,7 @@ export function Keypad({ value, onChange, onSubmit, disabled, allowDecimal, allo
   });
 
   const keyCls =
-    "h-[clamp(2.5rem,7dvh,3.5rem)] rounded-2xl border-2 border-line bg-card text-2xl font-bold text-ink shadow-[0_3px_0_#e6d6bf] active:translate-y-[2px] active:shadow-none disabled:opacity-40 touch-manipulation";
+    "key h-[clamp(2.5rem,7dvh,3.5rem)] font-display text-2xl tabular-nums touch-manipulation";
   const bottomLeft = allowNegative ? { k: "neg", label: "±", aria: "Toggle negative" } : null;
   const bottomRight = allowDecimal ? { k: ".", label: ".", aria: "Decimal point" } : null;
 

@@ -39,7 +39,7 @@ export function Shell({ children, wide = false, hideNav = false, compact = false
                   href={n.href}
                   aria-current={active ? "page" : undefined}
                   className={`min-h-11 flex-1 rounded-xl px-3 py-2 text-center text-base font-bold ${
-                    active ? "bg-ink text-paper" : "text-ink-soft hover:bg-card"
+                    active ? "bg-primary text-primary-fg" : "text-ink-soft hover:bg-card"
                   }`}
                 >
                   {n.label}

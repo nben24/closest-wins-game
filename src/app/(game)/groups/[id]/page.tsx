@@ -69,7 +69,7 @@ function Group() {
             key={t}
             role="tab"
             aria-selected={tab === t}
-            className={`min-h-11 flex-1 rounded-xl text-base font-bold ${tab === t ? "bg-ink text-paper" : "text-ink-soft"}`}
+            className={`min-h-11 flex-1 rounded-xl text-base font-bold ${tab === t ? "bg-primary text-primary-fg" : "text-ink-soft"}`}
             onClick={() => setTab(t)}
           >
             {t === "today" ? `Today · ${formatGameDate(g.date)}` : "This week"}
