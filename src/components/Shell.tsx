@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Wordmark } from "@/components/Logo";
 import { Avatar } from "@/components/Avatar";
+import { CREATOR } from "@/config/game";
 import { useSession } from "@/lib/client/session";
 
 const NAV = [
@@ -50,9 +51,21 @@ export function Shell({ children, wide = false, hideNav = false, compact = false
           </nav>
         )}
       </header>
-      <main className={`mx-auto w-full flex-1 px-4 ${compact ? "pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]" : "pt-5 pb-[calc(2rem+env(safe-area-inset-bottom))]"} ${wide ? "max-w-5xl" : "max-w-xl"}`}>
+      <main className={`mx-auto w-full flex-1 px-4 ${compact ? "pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]" : "pt-5 pb-6"} ${wide ? "max-w-5xl" : "max-w-xl"}`}>
         {children}
       </main>
+      {!compact && (
+        <footer className="pb-[calc(1.25rem+env(safe-area-inset-bottom))] text-center text-sm text-ink-soft">
+          made by{" "}
+          <a href={CREATOR.profileUrl} target="_blank" rel="noopener noreferrer" className="font-bold text-ink underline-offset-2 hover:underline">
+            @{CREATOR.handle}
+          </a>
+          {" · "}
+          <a href={CREATOR.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
+            source code on GitHub
+          </a>
+        </footer>
+      )}
     </div>
   );
 }

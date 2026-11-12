@@ -5,6 +5,13 @@
 export const GAME_TITLE = process.env.NEXT_PUBLIC_GAME_TITLE?.trim() || "Closest Wins";
 export const GAME_TAGLINE = "Five numbers a day. Closest guess wins.";
 
+/** Credit shown in the footer. */
+export const CREATOR = {
+  handle: "nben24",
+  profileUrl: "https://github.com/nben24",
+  sourceUrl: "https://github.com/nben24/closest-wins-game",
+};
+
 /** Timezone that defines the daily challenge date and the Monday–Sunday week. */
 export const GAME_TIMEZONE = "America/New_York";
 

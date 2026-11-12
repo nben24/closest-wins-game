@@ -1,5 +1,7 @@
 # Closest Wins
 
+**Play:** https://closest-wins-game.vercel.app · Made by [@nben24](https://github.com/nben24), built with [Claude Code](https://claude.com/claude-code).
+
 A mobile-first daily estimation game for friends and families. Everyone gets the same five numerical questions each day (America/New_York). Closer guesses earn more points — up to 1,000 per question. Private groups, daily and weekly standings, spoiler-free sharing, and a private admin area with AI-assisted, source-verified question generation.
 
 Stack: Next.js 16 (App Router, TypeScript), Tailwind CSS 4, Supabase (Postgres + anonymous Auth), Anthropic Claude API (optional), Vercel.
