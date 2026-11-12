@@ -124,3 +124,13 @@ describe("keypad input", () => {
     expect(displayInput("12.")).toBe("12.");
   });
 });
+
+import { normalizeSupabaseUrl } from "@/lib/supabase/url";
+describe("supabase url", () => {
+  it("strips pasted API paths", () => {
+    expect(normalizeSupabaseUrl("https://abc.supabase.co/rest/v1/")).toBe("https://abc.supabase.co");
+    expect(normalizeSupabaseUrl(" https://abc.supabase.co/ ")).toBe("https://abc.supabase.co");
+    expect(normalizeSupabaseUrl("https://abc.supabase.co")).toBe("https://abc.supabase.co");
+    expect(normalizeSupabaseUrl("")).toBeUndefined();
+  });
+});

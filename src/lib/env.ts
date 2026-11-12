@@ -1,3 +1,4 @@
+import { normalizeSupabaseUrl } from "@/lib/supabase/url";
 /**
  * Server-side environment. Never import this from client components.
  *
@@ -18,7 +19,7 @@ function clean(v: string | undefined): string | undefined {
 
 export const env = {
   get supabaseUrl() {
-    return clean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+    return normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
   },
   get supabasePublishableKey() {
     return clean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) ?? clean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
