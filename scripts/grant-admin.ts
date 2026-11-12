@@ -8,6 +8,7 @@
  * Requires DATABASE_URL (a role that can read auth.users, e.g. postgres).
  */
 import { getDb } from "@/lib/db";
+import { env } from "@/lib/env";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -17,7 +18,7 @@ async function main() {
     console.error("Usage: npm run admin:grant -- [--revoke] you@example.com");
     process.exit(1);
   }
-  if (!process.env.DATABASE_URL) {
+  if (!env.databaseUrl) {
     console.error("DATABASE_URL is not set. In local mode, sign in to /admin with LOCAL_ADMIN_PASSWORD instead.");
     process.exit(1);
   }

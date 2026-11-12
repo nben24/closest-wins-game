@@ -23,8 +23,9 @@ export const env = {
   get supabasePublishableKey() {
     return clean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) ?? clean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   },
+  /** DATABASE_URL, or POSTGRES_URL as set automatically by the Vercel ↔ Supabase integration. */
   get databaseUrl() {
-    return clean(process.env.DATABASE_URL);
+    return clean(process.env.DATABASE_URL) ?? clean(process.env.POSTGRES_URL);
   },
   get databaseCaCert() {
     return clean(process.env.DATABASE_CA_CERT);
@@ -47,9 +48,6 @@ export const env = {
   get localSessionSecret() {
     return clean(process.env.LOCAL_SESSION_SECRET) ?? "local-dev-only-secret-change-me";
   },
-  get appUrl() {
-    return clean(process.env.NEXT_PUBLIC_APP_URL);
-  },
   get allowDemoContent() {
     const v = clean(process.env.ALLOW_DEMO_CONTENT);
     if (v !== undefined) return v === "true";
@@ -69,10 +67,10 @@ export class ConfigError extends Error {}
 export function assertDeployable(): void {
   if (appMode() === "local" && env.isVercel) {
     throw new ConfigError(
-      "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and DATABASE_URL.",
+      "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and DATABASE_URL (or connect the Supabase integration, which sets them).",
     );
   }
   if (appMode() === "supabase" && !env.databaseUrl) {
-    throw new ConfigError("DATABASE_URL is required when Supabase is configured.");
+    throw new ConfigError("DATABASE_URL (or POSTGRES_URL from the Supabase integration) is required when Supabase is configured.");
   }
 }

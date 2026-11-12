@@ -51,7 +51,10 @@ async function createPgDb(connectionString: string): Promise<Db> {
   // it and configure TLS explicitly. Supabase's pooler certificate chains to
   // Supabase's own CA; provide it via DATABASE_CA_CERT for full verification.
   const url = new URL(connectionString);
-  url.searchParams.delete("sslmode");
+  // Drop provider-specific query params (sslmode, supa, pgbouncer, …); TLS is configured below.
+  for (const key of [...url.searchParams.keys()]) {
+    if (key !== "options" && key !== "application_name") url.searchParams.delete(key);
+  }
   const isLocalHost = ["localhost", "127.0.0.1"].includes(url.hostname);
   const ca = env.databaseCaCert?.replace(/\\n/g, "\n");
   const pool = new Pool({

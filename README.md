@@ -68,9 +68,9 @@ Admin status is checked on the server for every admin page, action and API route
 
 1. Push this repository to GitHub and import it in Vercel (framework: Next.js; defaults are fine).
 2. Set environment variables (Production + Preview) — see `.env.example`:
-   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`, optionally `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DATABASE_CA_CERT`, `NEXT_PUBLIC_GAME_TITLE`, `NEXT_PUBLIC_GAME_LAUNCH_DATE`.
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL` (all three are set automatically if you connect Supabase from Vercel's **Storage** tab — `POSTGRES_URL` is used as the database URL), `CRON_SECRET`, optionally `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DATABASE_CA_CERT`, `NEXT_PUBLIC_GAME_TITLE`, `NEXT_PUBLIC_GAME_LAUNCH_DATE`.
    Do **not** set `LOCAL_ADMIN_PASSWORD` or `ALLOW_DEMO_CONTENT=true` in production.
-3. Deploy. Local mode refuses to run on Vercel, so a missing variable fails loudly instead of silently using an ephemeral database.
+3. Deploy. Production deploys apply pending migrations automatically (`vercel.json` → `npm run vercel-build`); preview deploys don't touch the database schema. Local mode refuses to run on Vercel, so a missing variable fails loudly instead of silently using an ephemeral database.
 
 **Scheduled job.** `vercel.json` runs `GET /api/cron/daily` at 05:15 UTC (just after midnight in New York). It publishes today's challenge, fills the schedule (if auto-schedule is on), raises low-inventory warnings, starts a replenishment job (if auto-generate is on), and advances generation jobs within a ~4-minute budget. Vercel sends `Authorization: Bearer $CRON_SECRET`. This works on the Hobby plan (one run per day).
 

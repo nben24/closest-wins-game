@@ -1,190 +1,103 @@
-# Setup guide: Supabase + Vercel + (optional) Anthropic
+# Setup guide: Vercel + Supabase (+ optional Anthropic)
 
-Follow these steps in order. Each value says exactly where to click and what it looks like, so you can check you copied the right thing.
+Do the steps in order. Keep a private note (password manager or a text file **outside** this project) for anything you copy, and never commit secrets to GitHub.
 
-Keep a private note open (a password manager or a text file outside this project) and paste each value into it as you go. **Never commit these values to GitHub.**
+## What's automatic and what's manual
 
-At the end you will have these values:
-
-| Variable | Where it comes from | Required? |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase (Step 1.4) | Yes |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase (Step 1.4) | Yes |
-| `DATABASE_URL` | Supabase (Step 1.5) | Yes |
-| `CRON_SECRET` | You generate it (Step 2) | Yes |
-| `NEXT_PUBLIC_APP_URL` | Vercel, after the first deploy (Step 4.6) | Yes (for share links) |
-| `ANTHROPIC_API_KEY` | Anthropic Console (Step 6) | Only for AI question generation |
-| `ANTHROPIC_MODEL` | Leave unset (defaults to `claude-haiku-5-5`) | No |
-| `NEXT_PUBLIC_GAME_TITLE` | Leave unset (defaults to "Closest Wins") | No |
-| `NEXT_PUBLIC_GAME_LAUNCH_DATE` | Leave unset, or set the date of challenge #1, e.g. `2026-11-15` | No |
-
-Do **not** add `LOCAL_ADMIN_PASSWORD`, `LOCAL_SESSION_SECRET`, `LOCAL_DB_DIR` or `ALLOW_DEMO_CONTENT` on Vercel. Those are for running on your own computer only.
-
----
-
-## Step 1 — Supabase
-
-### 1.1 Create the project
-1. Go to https://supabase.com/dashboard and sign in (you can choose **Continue with GitHub**).
-2. Click **New project**.
-3. Choose your organization, then fill in:
-   - **Project name:** e.g. `closest-wins`
-   - **Database password:** click **Generate a password**, then **copy it into your private note now**. It's needed for `DATABASE_URL` in Step 1.5, and Supabase won't show it again. (You can reset it later: left sidebar → **Project Settings** (gear icon) → **Database** → **Reset database password**.)
-   - **Region:** pick one close to you, e.g. East US.
-4. Click **Create new project** and wait a minute or two until the dashboard finishes setting up.
-
-### 1.2 Turn on anonymous sign-ins (how players get a guest account)
-1. Left sidebar → **Authentication**.
-2. Under **Configuration**, click **Sign In / Providers**. (Direct link: `https://supabase.com/dashboard/project/<your-project-ref>/auth/providers`.)
-3. Find **Allow anonymous sign-ins** and switch it **on**. Click **Save** if a save button appears.
-4. On the same page make sure **Email** is enabled (it is by default). Your admin login uses it.
-
-### 1.3 Find your project reference
-Your project reference is the random ID in the dashboard's address bar:
-`https://supabase.com/dashboard/project/`**`abcdefghijklmnop`**`/...`
-You'll see it inside the URLs below.
-
-### 1.4 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-1. On your project's home page, click the **Connect** button at the top of the page.
-2. In the dialog, open the **App Frameworks** tab and choose **Next.js**.
-3. It shows two lines. Copy the value after the `=` on each:
-   - `NEXT_PUBLIC_SUPABASE_URL` → looks like `https://abcdefghijklmnop.supabase.co`
-   - The key line (it may be labelled `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `..._ANON_KEY`) → looks like `sb_publishable_…`
-
-   Store the key as **`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`** whatever the dialog calls it.
-
-Alternative: left sidebar → **Project Settings** → **API Keys** shows the **publishable** key. Copy the key that starts with `sb_publishable_`.
-
-⚠️ Do **not** copy the **secret** key (starts with `sb_secret_`) or the legacy `service_role` key. This app doesn't need either, and they must never be in the browser.
-
-### 1.5 `DATABASE_URL` (the database connection string)
-1. Click the **Connect** button at the top of the project page again.
-2. Open the connection-string tab (named **Connection String** or **Direct**) and choose **Transaction pooler**. This is the one for Vercel; it uses port **6543**.
-3. Copy the string. It looks like:
-   ```
-   postgresql://postgres.abcdefghijklmnop:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
-   ```
-4. Replace `[YOUR-PASSWORD]` (including the brackets) with the database password from Step 1.1.
-   - If the password contains any of `@ : / ? # & %` or a space, it has to be URL-encoded first. The simplest fix is to reset the password (Project Settings → Database → Reset database password) to one with only letters and numbers.
-5. Check it: it should start with `postgresql://postgres.` and contain `:6543/postgres`.
-
-### 1.6 Create the database tables
-Choose **one** of these options.
-
-**Option A: from your Mac (recommended)**
-1. Open the **Terminal** app.
-2. Run (paste your real `DATABASE_URL` between the single quotes):
-   ```bash
-   cd ~/Documents/Projects/closest-wins-game
-   DATABASE_URL='postgresql://postgres.abc...:yourpassword@aws-0-....pooler.supabase.com:6543/postgres' npm run db:migrate
-   ```
-3. Expected output: `Applying 20261111000000_init…`, `Applying 20261112000000_lower_cost_defaults…`, `Applied 2 migration(s).`
-
-**Option B: in the browser**
-1. Left sidebar → **SQL Editor** → **New query**.
-2. Open `supabase/migrations/20261111000000_init.sql` from this project, copy the entire file, paste it into the editor, then click **Run**.
-3. Click **New query** again and do the same with `supabase/migrations/20261112000000_lower_cost_defaults.sql`.
-
-Check: left sidebar → **Table Editor** should list tables such as `players`, `questions` and `daily_challenges`.
-
----
-
-## Step 2 — `CRON_SECRET`
-This is a password you make up. Vercel uses it to call the nightly job.
-
-In the **Terminal** app run:
-```bash
-openssl rand -hex 32
-```
-Copy the 64-character output into your note as `CRON_SECRET`.
-
----
-
-## Step 3 — Create your admin user
-1. Supabase left sidebar → **Authentication** → **Users**.
-2. Click **Add user** → **Create new user**.
-3. Enter your email and a strong password, tick **Auto Confirm User**, then click **Create user**.
-4. In **Terminal**:
-   ```bash
-   cd ~/Documents/Projects/closest-wins-game
-   DATABASE_URL='<same DATABASE_URL as above>' npm run admin:grant -- you@example.com
-   ```
-   Expected output: `you@example.com is now an administrator.`
-
----
-
-## Step 4 — Vercel
-
-### 4.1 Import the repository
-1. Go to https://vercel.com and sign in with **Continue with GitHub**.
-2. Click **Add New…** (top right) → **Project**.
-3. Under **Import Git Repository**, find `closest-wins-game` and click **Import**.
-   - If it isn't listed, click **Adjust GitHub App Permissions** (or **Configure GitHub App**), grant Vercel access to `nben24/closest-wins-game`, and come back.
-4. Leave **Framework Preset** as **Next.js** and leave the build settings at their defaults.
-
-### 4.2 Add the variables before the first deploy
-On the same import screen, expand **Environment Variables** and add these one at a time (Key on the left, Value on the right):
-
-| Key | Value |
+| Thing | How it gets done |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | from Step 1.4 |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | from Step 1.4 |
-| `DATABASE_URL` | from Step 1.5 (with your password filled in) |
-| `CRON_SECRET` | from Step 2 |
+| `NEXT_PUBLIC_SUPABASE_URL` | **Automatic** — added by the Supabase integration |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | **Automatic** — added by the Supabase integration |
+| Database connection | **Automatic** — the app uses the integration's `POSTGRES_URL` (`DATABASE_URL` is only needed if you don't use the integration) |
+| Database tables | **Automatic** — created on every production deploy (`vercel.json` → `npm run vercel-build`) |
+| Nightly job schedule | **Automatic** — from `vercel.json` |
+| Guest (anonymous) sign-ins | **Manual** — one switch in Supabase (Step 3) |
+| `CRON_SECRET` | **Manual** — you make one up (Step 4) |
+| Your admin account | **Manual** — create a user + paste one SQL line (Step 5) |
+| `ANTHROPIC_API_KEY` | **Manual, optional** — only for AI-generated questions (Step 7) |
 
-Tip: you can paste several `KEY=value` lines at once into the **Key** field and Vercel splits them into separate variables.
-
-### 4.3 Deploy
-Click **Deploy** and wait about 2 minutes for **Congratulations!**
-
-### 4.4 If you skipped 4.2, or need to change a variable later
-1. Open the project in Vercel → **Settings** tab (top) → **Environment Variables** (left).
-2. Add or edit the variable. Tick **Production** and **Preview**.
-3. Variables only apply to **new** deployments. Go to the **Deployments** tab, click the **⋯** menu on the newest deployment → **Redeploy**.
-
-### 4.5 Mark the secrets as Secret
-When adding `DATABASE_URL`, `CRON_SECRET` and `ANTHROPIC_API_KEY`, choose type **Secret** (write-only). The `NEXT_PUBLIC_…` values can stay **Config**; they're visible in the browser by design.
-
-### 4.6 `NEXT_PUBLIC_APP_URL`
-1. In the Vercel project, open the **Overview** tab. Under **Domains** you'll see something like `closest-wins-game.vercel.app` (or your own domain if you add one under **Settings** → **Domains**).
-2. Add the variable `NEXT_PUBLIC_APP_URL` = `https://closest-wins-game.vercel.app` (your real domain, with `https://`, no trailing slash).
-3. Redeploy (see 4.4).
-
-### 4.7 Check the nightly job
-Vercel project → **Settings** → **Cron Jobs**. You should see `/api/cron/daily` scheduled for `15 5 * * *` (00:15 New York time in winter, 01:15 in summer). It comes from `vercel.json` automatically.
+Don't add `LOCAL_ADMIN_PASSWORD`, `LOCAL_SESSION_SECRET`, `LOCAL_DB_DIR` or `ALLOW_DEMO_CONTENT` on Vercel — they're for running on your own computer only.
 
 ---
 
-## Step 5 — Check it works
-1. Open your site on your phone. You should see the "Pick your player" screen.
-2. Pick a player. The home screen will say **"Today's challenge isn't ready yet"**. That's expected: production never uses the unverified demo questions.
-3. Go to `https://<your-domain>/admin/login` and sign in with the email and password from Step 3.
-4. Add questions (Admin → **Questions** → **Add manually**, or **Generate** once Step 6 is done), approve them, then Admin → **Schedule** → **Fill empty days**.
+## Step 1 — Import the GitHub repo into Vercel
+1. Go to https://vercel.com and sign in with **Continue with GitHub**.
+2. Top right: **Add New…** → **Project**.
+3. Under **Import Git Repository**, find `closest-wins-game` → **Import**.
+   - Not listed? Click **Adjust GitHub App Permissions**, give Vercel access to `nben24/closest-wins-game`, and come back.
+4. Leave everything as is (Framework Preset: **Next.js**). Click **Deploy**.
+
+The site will build but show "Supabase is not configured" until Step 2 — that's expected.
+
+## Step 2 — Create and connect Supabase from Vercel
+1. Open your project in Vercel → **Storage** tab (top menu).
+2. Click **Create Database** (or **Connect Database**) → choose **Supabase** → **Continue**.
+3. Pick the **Free** plan, a name (e.g. `closest-wins`) and a region near you (e.g. US East) → **Create**.
+4. When asked which environments to connect, tick **Production**, **Preview** and **Development** → **Connect**.
+5. Check: Vercel project → **Settings** tab → **Environment Variables**. You should now see `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `POSTGRES_URL` and several more `POSTGRES_…` / `SUPABASE_…` entries.
+   - Click the eye icon on `POSTGRES_URL`: it should contain `pooler.supabase.com:6543`. If it shows `:5432` instead, see Troubleshooting.
+
+## Step 3 — Turn on guest sign-ins (in Supabase)
+1. Vercel project → **Storage** tab → click your Supabase database → **Open in Supabase** (this opens the Supabase dashboard for that project).
+2. Supabase left sidebar → **Authentication** → under **Configuration** click **Sign In / Providers**.
+3. Switch **Allow anonymous sign-ins** **on** → **Save** (if shown).
+4. Make sure **Email** is enabled on the same page (default) — your admin login uses it.
+
+## Step 4 — `CRON_SECRET`
+1. Make a random secret: open the **Terminal** app on your Mac and run `openssl rand -hex 32`, then copy the 64-character output.
+2. Vercel project → **Settings** → **Environment Variables** → add Key `CRON_SECRET`, Value = that string, type **Secret**, environments **Production** and **Preview** → **Save**.
+
+## Step 5 — Redeploy (creates the database tables)
+1. Vercel project → **Deployments** tab → on the newest deployment click **⋯** → **Redeploy**.
+2. Optional check: open that deployment → **Build Logs**. You should see `[migrate] Applying 20261111000000_init…` and `[migrate] Applied 2 migration(s).`
+3. In Supabase → left sidebar → **Table Editor**: tables like `players`, `questions`, `daily_challenges` now exist.
+
+## Step 6 — Make yourself admin
+1. Supabase → left sidebar → **Authentication** → **Users** → **Add user** → **Create new user**.
+2. Enter your email and a strong password, tick **Auto Confirm User** → **Create user**.
+3. Supabase → left sidebar → **SQL Editor** → **New query**, paste this (with your email) and click **Run**:
+   ```sql
+   insert into admins (auth_user_id, email, granted_by)
+   select id, email, 'sql-editor' from auth.users
+   where lower(email) = lower('you@example.com') and not coalesce(is_anonymous, false)
+   on conflict (auth_user_id) do nothing;
+   ```
+   It should report `1 row` affected. (Terminal alternative: `DATABASE_URL='…' npm run admin:grant -- you@example.com`.)
+4. Open `https://<your-site>/admin/login` and sign in. Your site's address is on the Vercel project's **Overview** tab under **Domains** (e.g. `closest-wins-game.vercel.app`).
+
+## Step 7 — (Optional) AI question generation
+1. https://console.anthropic.com → sign in.
+2. **Settings** → **Billing** → add a small prepaid credit (e.g. $5).
+3. **Settings** → **Limits** → set a low monthly spend limit (e.g. $5). This is a hard cap outside the app (the app also stops at its own $3/month estimate).
+4. **Settings** → **API Keys** → **Create Key** → name it `closest-wins` → copy it (starts with `sk-ant-`; shown only once).
+5. Vercel → **Settings** → **Environment Variables** → add `ANTHROPIC_API_KEY` (type **Secret**, Production) → then **Deployments** → **⋯** → **Redeploy**.
+6. Check: `/admin/generate` no longer says "AI generation is unavailable". Leave `ANTHROPIC_MODEL` unset to use the cheapest model (`claude-haiku-5-5`).
+
+## Step 8 — Check it works
+1. Open the site on your phone → "Pick your player" appears → pick one.
+2. Home says **"Today's challenge isn't ready yet"** — expected; production never uses the unverified demo questions.
+3. In `/admin`: add questions (**Questions → Add manually**, or **Generate**), approve them, then **Schedule → Fill empty days**.
+
+Every push to `main` on GitHub redeploys automatically from now on.
 
 ---
 
-## Step 6 — Anthropic API key (optional; only needed for AI-generated questions)
-1. Go to https://console.anthropic.com and sign in.
-2. **Billing:** go to **Settings** → **Billing** and buy a small amount of prepaid credit (e.g. $5).
-3. **Hard spend cap (recommended):** go to **Settings** → **Limits** and set a low monthly spend limit (e.g. $5). This is a cap outside the app, on top of the app's own $3/month cap.
-4. **Create the key:** **Settings** → **API Keys** → **Create Key**, name it `closest-wins-vercel`, then copy it straight away (it starts with `sk-ant-`; it's only shown once).
-5. In Vercel → **Settings** → **Environment Variables**, add `ANTHROPIC_API_KEY` = that key (type **Secret**), tick Production (and Preview if you like), then redeploy.
-6. Check: Admin → **Generate** no longer shows "AI generation is unavailable".
+## Without the integration (manual alternative)
+If you created the Supabase project directly at supabase.com instead, add these three variables yourself in Vercel → **Settings** → **Environment Variables**, then redeploy:
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: Supabase project → **Connect** button (top of the page) → **App Frameworks** → **Next.js** → copy the two values (URL looks like `https://abcd….supabase.co`, key starts with `sb_publishable_`; store the key under `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` even if labelled anon).
+- `DATABASE_URL`: **Connect** → connection string tab → **Transaction pooler** → copy, replace `[YOUR-PASSWORD]` with the database password you chose when creating the project (reset it at **Project Settings → Database → Reset database password**). Must contain `:6543`.
 
-Leave `ANTHROPIC_MODEL` unset to use `claude-haiku-5-5`, the cheapest option (about $2–4/month for a full month of questions).
-
----
-
-## Running locally against your real Supabase (optional)
-Create `.env.local` in the project folder (it's git-ignored) containing the same `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `DATABASE_URL`, then run `npm run dev`. Delete those three lines to go back to the offline demo mode.
+Never copy the **secret** key (`sb_secret_…`) or `service_role` key — this app doesn't use them.
 
 ## Troubleshooting
 | Symptom | Fix |
 |---|---|
-| Deployment page says "Supabase is not configured" | One of the three Supabase variables is missing or misspelled. Fix it in Vercel → Settings → Environment Variables, then redeploy. |
-| "Couldn't start a guest session" on the phone | Anonymous sign-ins are off (Step 1.2). |
-| `password authentication failed` | The `DATABASE_URL` password is wrong or contains special characters (Step 1.5, item 4). |
-| `Tenant or user not found` | You used the plain `postgres` user. The pooler user is `postgres.<project-ref>`; copy the whole string from **Connect**. |
-| Admin login says it failed | Check the user exists and is confirmed (Authentication → Users), then rerun Step 3.4. |
-| Changed a variable but nothing changed | Redeploy (Step 4.4). |
-| Supabase project paused | Free projects pause after about a week with no traffic. Open the Supabase dashboard and click **Restore project**. |
+| Site says "Supabase is not configured" | The integration isn't connected to **Production**, or you didn't redeploy after connecting (Step 2.4, Step 5). |
+| "Couldn't start a guest session" | Anonymous sign-ins are off (Step 3). |
+| Build log: `[migrate]` error / `password authentication failed` | Reconnect the integration, or set `DATABASE_URL` manually (see above) and redeploy. |
+| `POSTGRES_URL` uses port 5432 | Works, but for many simultaneous players add `DATABASE_URL` with the **Transaction pooler** string (port 6543) from Supabase → **Connect**. `DATABASE_URL` takes priority. |
+| SQL in Step 6 affects 0 rows | The email doesn't match a user in Authentication → Users, or the user was created as anonymous. |
+| Admin login fails | User not confirmed (tick Auto Confirm) or Step 6.3 not run. |
+| Changed a variable but nothing changed | Variables apply to new deployments only — **Redeploy**. |
+| Supabase project paused | Free projects pause after about a week without traffic — open the Supabase dashboard and click **Restore project**. |
+| Cron job shows errors | `CRON_SECRET` missing (Step 4). The game still works without it — today's challenge is published when the first player arrives — but automation won't run. |
