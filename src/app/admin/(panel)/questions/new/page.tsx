@@ -1,4 +1,4 @@
-import { EMPTY_QUESTION, QuestionForm } from "@/components/admin/QuestionForm";
+import { QuestionForm } from "@/components/admin/QuestionForm";
 
 export default function NewQuestion() {
   return (
@@ -8,7 +8,7 @@ export default function NewQuestion() {
         Manual questions follow the same rules as generated ones: a source, a verbatim supporting excerpt that includes the number, and approval
         before they can be scheduled. New questions go to the review queue.
       </p>
-      <QuestionForm initial={EMPTY_QUESTION} />
+      <QuestionForm />
     </div>
   );
 }

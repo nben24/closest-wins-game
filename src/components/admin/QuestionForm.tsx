@@ -52,7 +52,7 @@ const TOLERANCE_HELP: Record<ScoringType, (t: number) => string> = {
   percent: (t) => `Half points when the guess is ${t} percentage point(s) away.`,
 };
 
-export function QuestionForm({ initial, readOnly = false }: { initial: QuestionFormValues; readOnly?: boolean }) {
+export function QuestionForm({ initial = EMPTY_QUESTION, readOnly = false }: { initial?: QuestionFormValues; readOnly?: boolean }) {
   const [v, setV] = useState(initial);
   const [state, formAction, pending] = useActionState(saveQuestionAction, {});
   const set = <K extends keyof QuestionFormValues>(k: K, val: QuestionFormValues[K]) => setV((p) => ({ ...p, [k]: val }));

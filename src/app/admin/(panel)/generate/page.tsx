@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createJobAction } from "@/app/admin/actions";
 import { ActionForm } from "@/components/admin/ActionForm";
 import { Badge, inputCls, Panel } from "@/components/admin/ui";
-import { categoryLabel } from "@/components/QuestionCard";
+import { categoryLabel } from "@/lib/labels";
 import { CATEGORIES } from "@/lib/content-checks";
 import { getSettings } from "@/lib/server/admin/settings";
 import { listJobs, monthlyUsage } from "@/lib/server/ai/pipeline";
