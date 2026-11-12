@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { bulkApproveAction } from "@/app/admin/actions";
 import { ActionForm } from "@/components/admin/ActionForm";
+import { SelectAll } from "@/components/admin/SelectAll";
 import { Badge } from "@/components/admin/ui";
 import { CATEGORIES, DIFFICULTIES } from "@/lib/content-checks";
 import { formatValue } from "@/lib/format";
@@ -46,7 +47,7 @@ export default async function QuestionsPage(props: PageProps<"/admin/questions">
         <div className="overflow-x-auto rounded-2xl border border-line bg-card">
           <table className="w-full text-sm">
             <thead className="bg-paper text-left text-ink-soft">
-              <tr><th className="p-2"><span className="sr-only">Select</span></th><th className="p-2">Prompt</th><th className="p-2">Answer</th><th className="p-2">Category</th><th className="p-2">Status</th><th className="p-2">Verification</th><th className="p-2">Origin</th><th className="p-2">Used</th></tr>
+              <tr><th className="p-2"><SelectAll /></th><th className="p-2">Prompt</th><th className="p-2">Answer</th><th className="p-2">Category</th><th className="p-2">Status</th><th className="p-2">Verification</th><th className="p-2">Origin</th><th className="p-2">Used</th></tr>
             </thead>
             <tbody>
               {rows.map((q) => (
