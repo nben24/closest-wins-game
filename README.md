@@ -2,16 +2,16 @@
 
 **Play:** https://closest-wins-game.vercel.app · Made by [@nben24](https://github.com/nben24), built with [Claude Code](https://claude.com/claude-code).
 
-A mobile-first daily estimation game for friends and families. Everyone gets the same five numerical questions each day (America/New_York). Closer guesses earn more points — up to 1,000 per question. Private groups, daily and weekly standings, spoiler-free sharing, and a private admin area with AI-assisted, source-verified question generation.
+A mobile-first daily estimation game for friends and families. Everyone gets the same five numerical questions each day (America/New_York). Closer guesses earn more points — up to 1,000 per question. Private groups, public daily and weekly leaderboards (with average per day and past weekly champions), spoiler-free sharing, and a private admin area with AI-assisted, source-verified question generation.
 
 <p align="center">
-  <img src="docs/screenshots/1-home.png" width="160" alt="Home screen with today's challenge">
+  <img src="docs/screenshots/1-home.png" width="160" alt="Home screen with today's challenge and who is leading today and this week">
   <img src="docs/screenshots/2-question.png" width="160" alt="A question with the countdown timer and number keypad">
   <img src="docs/screenshots/3-answer.png" width="160" alt="Answer reveal: a green 'Nailed it' box for an exact guess">
   <img src="docs/screenshots/4-results.png" width="160" alt="End-of-day results with total score and rank">
-  <img src="docs/screenshots/5-ranks.png" width="160" alt="Public daily leaderboard">
+  <img src="docs/screenshots/5-ranks.png" width="160" alt="Weekly leaderboard with days played and average per day">
 </p>
-<p align="center"><sub>Home · Answering (10 seconds) · The reveal · Your results · Leaderboard</sub></p>
+<p align="center"><sub>Home + who's leading · Answering (10 seconds) · The reveal · Your results · Weekly leaderboard</sub></p>
 
 Stack: Next.js 16 (App Router, TypeScript), Tailwind CSS 4, Supabase (Postgres + anonymous Auth), Anthropic Claude API (optional), Vercel.
 

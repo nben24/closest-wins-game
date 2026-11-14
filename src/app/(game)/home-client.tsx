@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Avatar } from "@/components/Avatar";
 import { Onboarding } from "@/components/Onboarding";
 import { CenterMessage, Shell, Spinner } from "@/components/Shell";
 import { MAX_POINTS_PER_DAY } from "@/config/game";
@@ -9,6 +10,7 @@ import { api } from "@/lib/client/api";
 import { useSession } from "@/lib/client/session";
 import { formatPoints } from "@/lib/format";
 import { formatGameDate, nextGameDayStart } from "@/lib/time";
+import type { Leader, LeadersSummary } from "@/lib/server/leaderboard";
 
 interface StateLite {
   serverNow: string;
@@ -43,10 +45,64 @@ export function HomeClient() {
   return <Shell><Today name={me.name} /></Shell>;
 }
 
+function LeaderLine({ icon, label, leader, href, extra }: { icon: string; label: string; leader: Leader; href: string; extra?: string }) {
+  return (
+    <li>
+      <Link href={href} className="flex min-h-12 items-center gap-3 py-2">
+        <span aria-hidden="true" className="w-6 text-center text-xl">{icon}</span>
+        <Avatar id={leader.avatarId} size="sm" label="" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-ink-soft">{label}</span>
+          <span className="block truncate text-lg font-semibold">
+            {leader.isViewer ? "You!" : leader.name}
+            {leader.tiedWith > 0 && <span className="text-base font-normal text-ink-soft"> +{leader.tiedWith} tied</span>}
+          </span>
+        </span>
+        <span className="text-right">
+          <span className="block font-display text-xl tabular-nums text-sun">{formatPoints(leader.total)}</span>
+          {extra && <span className="block text-xs text-ink-soft">{extra}</span>}
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+/** Who's leading today / this week, and last week's champion. Scores only — nothing about the answers. */
+function Leaders({ data }: { data: LeadersSummary }) {
+  const { today, week, lastWeek } = data;
+  if (!today && !week && !lastWeek) return null;
+  return (
+    <section className="card px-5 py-3" aria-labelledby="leaders-heading">
+      <h2 id="leaders-heading" className="sr-only">Who&apos;s leading</h2>
+      <ul className="divide-y divide-line">
+        {today ? (
+          <LeaderLine icon="👑" label="Leading today" leader={today} href="/leaderboard" extra={`of ${today.players} played`} />
+        ) : (
+          <li className="flex min-h-12 items-center gap-3 py-2 text-base text-ink-soft">
+            <span aria-hidden="true" className="w-6 text-center text-xl">👑</span>
+            Nobody has finished today yet. Be the first!
+          </li>
+        )}
+        {week && (
+          <LeaderLine
+            icon="🏆"
+            label="Leading this week"
+            leader={week}
+            href="/leaderboard#week"
+            extra={week.daysPlayed ? `${week.daysPlayed} day${week.daysPlayed === 1 ? "" : "s"}` : undefined}
+          />
+        )}
+        {lastWeek && <LeaderLine icon="🥇" label="Last week's champion" leader={lastWeek} href="/leaderboard#week" />}
+      </ul>
+    </section>
+  );
+}
+
 function Today({ name }: { name: string }) {
   const [state, setState] = useState<StateLite | null>(null);
   const [groups, setGroups] = useState<GroupLite[] | null>(null);
   const [rank, setRank] = useState<{ rank: number; of: number } | null>(null);
+  const [leaders, setLeaders] = useState<LeadersSummary | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +110,9 @@ function Today({ name }: { name: string }) {
     api<{ groups: GroupLite[] }>("/api/groups").then((r) => setGroups(r.groups)).catch(() => setGroups([]));
     api<{ board: { totalPlayers: number; me: { rank: number } | null } }>("/api/leaderboard?scope=day")
       .then((r) => r.board.me && setRank({ rank: r.board.me.rank, of: r.board.totalPlayers }))
+      .catch(() => {});
+    api<{ leaders: LeadersSummary }>("/api/leaderboard/summary")
+      .then((r) => setLeaders(r.leaders))
       .catch(() => {});
   }, []);
   const countdown = useCountdown(state ? nextGameDayStart(new Date(state.serverNow)) : null);
@@ -117,6 +176,8 @@ function Today({ name }: { name: string }) {
           )}
         </section>
       )}
+
+      {leaders && ch && <Leaders data={leaders} />}
 
       <section className="card p-5" aria-labelledby="groups-heading">
         <div className="flex items-center justify-between">

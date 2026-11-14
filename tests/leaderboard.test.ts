@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db";
-import { dailyBoard, everyoneStats, weeklyBoard } from "@/lib/server/leaderboard";
+import { dailyBoard, everyoneStats, leadersSummary, pastWeeks, weeklyBoard } from "@/lib/server/leaderboard";
 import { beginRound, getPlayState, submitRound } from "@/lib/server/play";
 import { getResults } from "@/lib/server/results";
 import { fakeClock, freshDb, makePlayer, resetClock } from "./support/db";
@@ -67,6 +67,49 @@ describe("public leaderboard", () => {
     expect(w.me?.daysCounted).toBe(5);
     const totals = (await db.query<{ total_score: number }>("select total_score from attempts order by total_score desc")).map((r) => r.total_score);
     expect(w.me?.total).toBe(totals.slice(0, 5).reduce((x, y) => x + y, 0));
+    // The average covers every day played, not just the counted five.
+    expect(w.me?.average).toBe(Math.round(totals.reduce((x, y) => x + y, 0) / totals.length));
+    expect(w.weekEnd).toBe("2026-11-15");
+    expect(w.final).toBe(false);
+    expect((await weeklyBoard(a, "2026-11-08")).final).toBe(true);
+  });
+
+  it("lists past weeks' top three and the home-screen leaders", async () => {
+    const [a, b, c] = [await makePlayer(db), await makePlayer(db), await makePlayer(db)];
+    const exactFor = async (p: string) => (await answers((await getPlayState(p)).challenge!.id)).map(String);
+
+    // Last week (Mon Nov 2 – Sun Nov 8): a plays one perfect day, b plays two days.
+    clock.set("2026-11-04T18:00:00Z");
+    await play(a, await exactFor(a));
+    await play(b, await exactFor(b));
+    clock.set("2026-11-05T18:00:00Z");
+    await play(b, ["1", "1", "1", "1", "1"]);
+
+    // This week: only c has played so far.
+    clock.set("2026-11-11T18:00:00Z");
+    await play(c, await exactFor(c));
+
+    const weeks = await pastWeeks(a);
+    expect(weeks).toHaveLength(1); // the current week is never listed
+    expect(weeks[0].weekStart).toBe("2026-11-02");
+    expect(weeks[0].players).toBe(2);
+    const [first, second] = weeks[0].podium;
+    expect(first.playerId).toBe(b); // two days beat one perfect day on total…
+    expect(first.daysPlayed).toBe(2);
+    expect(second.playerId).toBe(a);
+    expect(second.isViewer).toBe(true);
+    expect(second.average).toBe(5000); // …but the perfect day shows in the average
+    expect(first.average!).toBeLessThan(5000);
+
+    const sum = await leadersSummary(a);
+    expect(sum.today?.total).toBe(5000);
+    expect(sum.today?.players).toBe(1);
+    expect(sum.today?.isViewer).toBe(false);
+    expect(sum.week?.daysPlayed).toBe(1);
+    expect(sum.lastWeek?.name).toBe(first.name);
+    expect(sum.lastWeek?.tiedWith).toBe(0);
+    // Nothing about questions or guesses is included.
+    expect(JSON.stringify(sum)).not.toMatch(/answer|guess|prompt/i);
   });
 
   it("gives aggregate comparisons only with 3+ guesses and only after finishing", async () => {
