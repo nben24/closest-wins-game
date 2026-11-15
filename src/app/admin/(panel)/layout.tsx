@@ -13,6 +13,7 @@ const NAV = [
   ["/admin/generate", "Generate"],
   ["/admin/schedule", "Schedule"],
   ["/admin/leaderboard", "Leaderboard"],
+  ["/admin/answers", "Answers"],
   ["/admin/settings", "Settings"],
 ];
 
