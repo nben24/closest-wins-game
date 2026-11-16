@@ -98,11 +98,35 @@ function Leaders({ data }: { data: LeadersSummary }) {
   );
 }
 
+interface Prize {
+  weekStart: string;
+  rank: number;
+  code: string;
+}
+
+const PLACE = ["", "1st", "2nd", "3rd"];
+
+/** Shown only to a weekly top-3 finisher: their private claim code. */
+function PrizeCard({ prize }: { prize: Prize }) {
+  return (
+    <section className="card border-sun p-5 text-center" aria-labelledby="prize-heading">
+      <p className="text-4xl" aria-hidden="true">{prize.rank === 1 ? "🏆" : prize.rank === 2 ? "🥈" : "🥉"}</p>
+      <h2 id="prize-heading" className="title mt-1 font-display text-2xl text-sun">
+        You finished {PLACE[prize.rank]} last week!
+      </h2>
+      <p className="mt-2 text-base text-ink-soft">Your prize code (week of {formatGameDate(prize.weekStart)}):</p>
+      <p className="mt-1 font-display text-4xl tracking-widest tabular-nums select-all">{prize.code}</p>
+      <p className="mt-2 text-sm text-ink-soft">Only you can see this. Send it to the person who runs the game to claim a prize.</p>
+    </section>
+  );
+}
+
 function Today({ name }: { name: string }) {
   const [state, setState] = useState<StateLite | null>(null);
   const [groups, setGroups] = useState<GroupLite[] | null>(null);
   const [rank, setRank] = useState<{ rank: number; of: number } | null>(null);
   const [leaders, setLeaders] = useState<LeadersSummary | null>(null);
+  const [prize, setPrize] = useState<Prize | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -111,8 +135,11 @@ function Today({ name }: { name: string }) {
     api<{ board: { totalPlayers: number; me: { rank: number } | null } }>("/api/leaderboard?scope=day")
       .then((r) => r.board.me && setRank({ rank: r.board.me.rank, of: r.board.totalPlayers }))
       .catch(() => {});
-    api<{ leaders: LeadersSummary }>("/api/leaderboard/summary")
-      .then((r) => setLeaders(r.leaders))
+    api<{ leaders: LeadersSummary; prize: Prize | null }>("/api/leaderboard/summary")
+      .then((r) => {
+        setLeaders(r.leaders);
+        setPrize(r.prize);
+      })
       .catch(() => {});
   }, []);
   const countdown = useCountdown(state ? nextGameDayStart(new Date(state.serverNow)) : null);
@@ -127,6 +154,7 @@ function Today({ name }: { name: string }) {
       <p className="text-lg text-ink-soft">
         Hi, <span className="font-bold text-ink">{name}</span> 👋
       </p>
+      {prize && <PrizeCard prize={prize} />}
       {!ch ? (
         <CenterMessage title="Today's challenge isn't ready yet">
           The questions are still being prepared. Please check back a little later.

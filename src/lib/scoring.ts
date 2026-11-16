@@ -69,6 +69,36 @@ export const TOLERANCE_LIMITS: Record<ScoringType, { min: number; max: number }>
   percent: { min: 0.5, max: 50 },
 };
 
+/**
+ * Fairer tolerance floors (from real play data: strict tolerances turned good
+ * estimates into zeros). Never tightens a tolerance, only loosens it.
+ *  - ratio: at least ×1.35 (easy) / ×1.5 (medium) / ×1.8 (hard)
+ *  - year: grows with how long ago it was — about ±3 years for recent events
+ *    up to ±25 for very old ones (people are fuzzier about older dates)
+ *  - percent: at least 6 points
+ * Mirrored in supabase/migrations/20261115000000_quality_and_prizes.sql.
+ */
+export function fairTolerance(
+  type: ScoringType,
+  tolerance: number,
+  answer: number,
+  difficulty: string,
+  currentYear = new Date().getUTCFullYear(),
+): number {
+  if (!Number.isFinite(tolerance)) return tolerance;
+  if (type === "ratio") return Math.max(tolerance, difficulty === "easy" ? 1.35 : difficulty === "medium" ? 1.5 : 1.8);
+  if (type === "year") return Math.max(tolerance, Math.min(25, Math.max(3, Math.round((currentYear - answer) / 8))));
+  if (type === "percent") return Math.max(tolerance, 6);
+  return tolerance;
+}
+
+/** Year guesses outside this range are almost certainly typos ("0", "12"). */
+export const YEAR_GUESS_MIN = 1000;
+export const YEAR_GUESS_MAX = 2100;
+export function isPlausibleYear(n: number): boolean {
+  return Number.isInteger(n) && n >= YEAR_GUESS_MIN && n <= YEAR_GUESS_MAX;
+}
+
 function isExact(answer: number, guess: number): boolean {
   return Math.abs(guess - answer) <= 1e-9 * Math.max(1, Math.abs(answer));
 }

@@ -6,9 +6,11 @@ import { categoryLabel } from "@/lib/labels";
 import { describeMiss, formatPoints, formatValue } from "@/lib/format";
 import { addDays, formatGameDate, isGameDate } from "@/lib/time";
 import { today } from "@/lib/server/challenges";
-import { dayAnswers, type AnswerPlayer, type AnswerQuestion, type AnswerRound } from "@/lib/server/admin/answers";
+import { dayAnswers, questionFlags, type AnswerPlayer, type AnswerQuestion, type AnswerRound } from "@/lib/server/admin/answers";
 
 /** Admin: every player's guess, points and miss for each question of a day. */
+
+const DIFFICULTY_LABEL: Record<string, string> = { easy: "might know", medium: "reason it out", hard: "stretch" };
 
 function Who({ p }: { p: AnswerPlayer }) {
   return (
@@ -47,15 +49,25 @@ function QuestionPanel({ q, players }: { q: AnswerQuestion; players: AnswerPlaye
   const low = guesses.filter((g) => g < q.answer).length;
   const bulls = rows.filter(({ r }) => r!.status === "answered" && (r!.score ?? 0) >= 900).length;
   const avgPts = rows.length ? Math.round(rows.reduce((s, { r }) => s + (r!.score ?? 0), 0) / rows.length) : null;
+  const flags = questionFlags(q, rows.map(({ r }) => r!));
 
   return (
     <Panel>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-bold text-ink-soft">
-            Q{q.position} · {categoryLabel(q.category)} · {q.scoringType}
+            Q{q.position} · {categoryLabel(q.category)} · {DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty} · {q.scoringType}
             {q.voided && <span className="ml-2 font-bold text-coral">VOIDED</span>}
           </p>
+          {flags.length > 0 && (
+            <p className="mt-1 flex flex-wrap gap-2">
+              {flags.map((f) => (
+                <span key={f.key} title={f.hint} className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${f.key === "too_easy" ? "bg-sky-soft text-sky" : "bg-coral-soft text-coral"}`}>
+                  ⚑ {f.label}: {f.hint}
+                </span>
+              ))}
+            </p>
+          )}
           <h2 className="mt-1 text-lg font-bold">{q.prompt}</h2>
         </div>
         <div className="rounded-xl bg-ink px-4 py-2 text-right text-paper">

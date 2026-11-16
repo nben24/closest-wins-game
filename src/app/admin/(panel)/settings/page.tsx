@@ -30,15 +30,26 @@ export default async function SettingsPage() {
           <Panel title="Automation (all off by default)">
             <div className="space-y-2">
               {toggle("autoGenerate", "Automatic generation", s.autoGenerate, "When approved inventory falls below the threshold, the daily job starts a generation batch (within the limits below).")}
-              {toggle("autoApprove", "Automatic approval", s.autoApprove, "Candidates that pass every automated check — including the independent source check — are approved without review. Held candidates always need you.")}
+              {toggle("autoApprove", "Automatic approval", s.autoApprove, "Questions that pass the checks below are approved without review. Anything that fails is set aside in the review queue (you can ignore it).")}
               <label className="ml-8 flex items-start gap-2 text-sm"><input type="checkbox" name="autoApproveAck" defaultChecked={s.autoApprove} /> I understand automated checks don&apos;t guarantee correctness.</label>
+              <fieldset className="ml-8 space-y-2 rounded-xl border border-line p-3">
+                <legend className="px-1 text-sm font-bold">How strict should automatic approval be?</legend>
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="radio" name="approvalMode" value="relaxed" defaultChecked={s.approvalMode === "relaxed"} className="mt-1" />
+                  <span><strong>Relaxed (recommended for hands-off):</strong> approve when the AI&apos;s research found a source that supports the answer <em>and</em> a separate AI double-check, which never sees the answer, lands within the question&apos;s tolerance. Costs about $0.001 extra per question.</span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="radio" name="approvalMode" value="strict" defaultChecked={s.approvalMode === "strict"} className="mt-1" />
+                  <span><strong>Strict:</strong> approve only when the app opens the source page itself and finds the exact number. Safer, but many good questions get held for review.</span>
+                </label>
+              </fieldset>
               {toggle("autoSchedule", "Automatic scheduling", s.autoSchedule, "The daily job fills empty future days from the approved reserve. (Today is always filled from the reserve if empty.)")}
             </div>
           </Panel>
           <Panel title="Inventory">
             <div className="grid gap-3 sm:grid-cols-2">
               {num("inventoryThresholdDays", "Low-inventory threshold (days)", s.inventoryThresholdDays, "Warn (and auto-generate, if on) below this many days of approved questions.")}
-              {num("scheduleAheadDays", "Schedule ahead (days)", s.scheduleAheadDays, "How far ahead automatic scheduling fills.")}
+              {num("scheduleAheadDays", "Keep this many days scheduled ahead", s.scheduleAheadDays, "Automatic scheduling tops up to this many future days every night.")}
             </div>
           </Panel>
           <Panel title="Cost controls">

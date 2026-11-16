@@ -4,24 +4,41 @@ import { MAX_PROMPT_CHARS } from "@/config/game";
 export const CONTENT_GUIDELINES = `Closest Wins is a daily estimation game for friends and families (ages ~10 and up).
 Players see each question for 4 seconds, then have 10 seconds to type a number. Closer guesses score more.
 
+Every question needs a "way in": either a fact a decent share of adults actually know, or something a regular
+adult can reason toward from everyday life and land within about 2× of the answer. If most people would just be
+typing a random number, it's a bad question.
+
+The three difficulty levels mean:
+- "easy" = "you might know this": well-known trivia where many players can get it exactly or very close
+  (famous years, sports facts, everyday counts). Still not so obvious that everyone gets it exactly.
+- "medium" = "reason it out": most people won't know it exactly but can estimate well from everyday experience
+  (how many teeth a dog has, the price of a familiar product, how long something takes).
+- "hard" = "stretch": harder, but still in everyday terms with a way in. Never a random obscure statistic.
+
 What makes a great question:
 - A familiar subject (everyday objects, food and drink, animals and nature, well-known movies/music/TV,
   familiar geography and distances, products and launch prices, sports, accessible science and technology).
-- A number someone can reason toward without specialist knowledge, ideally with a surprising answer.
+- Everyday US units: feet, miles, pounds, dollars, minutes, years, counts. Never metric-only or scientific units
+  (no meters per second, kilometers, liters, cubic anything, kelvin, joules, light-years).
+- Never scientific constants or huge physical quantities (speed of sound or light, volumes of lakes or oceans,
+  areas of countries, distances in space, populations of large regions).
 - A short, precise prompt (under ${MAX_PROMPT_CHARS} characters, one sentence) that ends with "?".
+- Put what is being asked at the END of the prompt (e.g. "...how many times does it beat in one full day?").
+  Never include another number in the prompt that players could mistake for the answer or type back in.
 - Exactly one reasonable interpretation: state the geography, time period, product size/edition or
   measurement basis when it matters. Never use "average" or "typical" without defining the population and period.
+- Don't hinge on a precise official figure ("per the 2020 survey"): prefer facts where close is clearly good enough.
 - Stable facts that won't change soon. Avoid "currently"/"this year" unless a reference period is given.
 - Rounding appropriate to the evidence; no artificial precision for uncertain estimates.
 - Family friendly: no violence, deaths, disasters, alcohol, drugs, gambling, weapons, sex, or politics.
 - No celebrity net worth, salaries or other unsupported estimates.
-- Avoid obscure statistics with no reference point (e.g. a random airport's elevation, an arbitrary country's GDP).
 
-Scoring setup (choose per question):
-- "ratio": positive quantities spanning large scales; tolerance is a factor > 1 (e.g. 1.5 = half points when off by ×1.5).
-  Use ~1.2–1.3 for things many people know, ~1.5 for medium, 2–3 for wild guesses.
-- "year": calendar years; tolerance in years at which the player gets half points (typically 3–10). allow_decimal false.
-- "percent": answers 0–100; tolerance in percentage points (typically 5–10). unit "%".
+Scoring setup (choose per question; be generous — "pretty close" should earn real points):
+- "ratio": positive quantities; tolerance is a factor > 1 (e.g. 1.5 = half points when off by ×1.5).
+  Use 1.35–1.5 for easy, 1.5–1.8 for medium, 1.8–2.5 for hard. Never below 1.35.
+- "year": calendar years; tolerance in years at which the player gets half points: about 3 for the last 20 years,
+  5–10 for the 1900s, 15–25 for anything older than 1900. allow_decimal false.
+- "percent": answers 0–100; tolerance in percentage points (6–10). unit "%".
 - "absolute": small counts (< ~20), values that can be zero or negative; tolerance in the question's unit.
 Set allow_decimal true only if a decimal answer is reasonable; allow_negative only if the answer can be negative.`;
 
@@ -94,4 +111,15 @@ reference period: ${p.reference_period ?? "(none given)"}
 proposed explanation: ${p.explanation}
 suggested source URL (unverified): ${p.suggested_source_url ?? "(none)"}
 </question>`;
+}
+
+
+/** Independent double-check: answer the question from general knowledge, without seeing the proposed answer. */
+export const CROSS_CHECK_SYSTEM = `You answer numerical trivia questions from your own general knowledge.
+Give your single best numerical answer in the unit requested. Do not search; do not explain at length.
+If you genuinely have no idea, set answer to null.`;
+
+export function crossCheckUserPrompt(p: { prompt: string; unit: string; reference_period: string | null }): string {
+  return `Question: ${p.prompt}
+Answer in: ${p.unit || "(a plain number)"}${p.reference_period ? `\nReference period: ${p.reference_period}` : ""}`;
 }

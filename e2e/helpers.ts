@@ -11,6 +11,12 @@ export async function typeOnKeypad(page: Page, digits: string) {
   for (const d of digits) await page.getByRole("button", { name: d, exact: true }).click();
 }
 
+/** Type a guess that can be locked in: year questions only accept plausible years. */
+export async function typeGuess(page: Page, digits: string) {
+  const isYear = await page.getByText("Enter a year, like 1995").isVisible();
+  await typeOnKeypad(page, isYear ? "1990" : digits);
+}
+
 export async function waitForAnswering(page: Page) {
   await expect(page.getByText("Answer now")).toBeVisible({ timeout: 8_000 });
 }
@@ -20,7 +26,7 @@ export async function playRound(page: Page, digits = "12", opts: { dismiss?: boo
   await page.getByRole("button", { name: "Show the question" }).click();
   await expect(page.getByText("Reading", { exact: true })).toBeVisible();
   await waitForAnswering(page);
-  await typeOnKeypad(page, digits);
+  await typeGuess(page, digits);
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByText("Your guess")).toBeVisible();
   if (opts.dismiss !== false) {

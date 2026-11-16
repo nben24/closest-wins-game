@@ -83,7 +83,8 @@ describe("public leaderboard", () => {
     await play(a, await exactFor(a));
     await play(b, await exactFor(b));
     clock.set("2026-11-05T18:00:00Z");
-    await play(b, ["1", "1", "1", "1", "1"]);
+    // Second day: four exact answers and one blank → exactly 4,000 (no ties, whatever the questions are).
+    await play(b, [...(await exactFor(b)).slice(0, 4), null]);
 
     // This week: only c has played so far.
     clock.set("2026-11-11T18:00:00Z");

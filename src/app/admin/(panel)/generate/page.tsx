@@ -28,15 +28,16 @@ export default async function GeneratePage() {
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block text-sm font-bold">
                 How many approved-quality questions (max {settings.maxQuestionsPerJob})
-                <input name="quantity" type="number" min={1} max={settings.maxQuestionsPerJob} defaultValue={Math.min(10, settings.maxQuestionsPerJob)} className={inputCls} />
+                <input name="quantity" type="number" min={1} max={settings.maxQuestionsPerJob} defaultValue={Math.min(25, settings.maxQuestionsPerJob)} className={inputCls} />
               </label>
               <fieldset className="text-sm font-bold">
                 Difficulty mix (%)
                 <div className="mt-1 grid grid-cols-3 gap-2">
-                  {[["easy", 40], ["medium", 45], ["hard", 15]].map(([k, d]) => (
-                    <label key={k} className="text-xs font-semibold">{k}<input name={String(k)} type="number" min={0} max={100} defaultValue={d} className={inputCls} /></label>
+                  {[["easy", 40, "Might know"], ["medium", 40, "Reason it out"], ["hard", 20, "Stretch"]].map(([k, d, label]) => (
+                    <label key={k} className="text-xs font-semibold">{label}<input name={String(k)} type="number" min={0} max={100} defaultValue={d} className={inputCls} /></label>
                   ))}
                 </div>
+                <span className="mt-1 block text-xs font-normal text-ink-soft">40/40/20 matches each day&apos;s 2 + 2 + 1 mix.</span>
               </fieldset>
             </div>
             <fieldset className="mt-4">

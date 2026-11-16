@@ -1,7 +1,7 @@
 import "server-only";
 import { getDb } from "@/lib/db";
 import { formatNickname } from "@/lib/names";
-import type { ScoringType } from "@/lib/scoring";
+import { scoreGuess, type ScoringType } from "@/lib/scoring";
 
 /**
  * Admin-only: every player's guess for every question on one day. Contains
@@ -16,6 +16,8 @@ export interface AnswerQuestion {
   unit: string;
   category: string;
   scoringType: ScoringType;
+  tolerance: number;
+  difficulty: string;
   voided: boolean;
 }
 
@@ -55,11 +57,16 @@ export async function dayAnswers(date: string): Promise<DayAnswers> {
   if (!ch) return { date, challenge: null, questions: [], players: [] };
 
   const questions = (
-    await db.query<{ position: number; prompt: string; answer: number; unit: string; category: string; scoring_type: ScoringType; voided: boolean }>(
-      "select position, prompt, answer, unit, category, scoring_type, voided from challenge_questions where challenge_id = $1 order by position",
+    await db.query<{
+      position: number; prompt: string; answer: number; unit: string; category: string; scoring_type: ScoringType; tolerance: number; difficulty: string; voided: boolean;
+    }>(
+      "select position, prompt, answer, unit, category, scoring_type, tolerance, difficulty, voided from challenge_questions where challenge_id = $1 order by position",
       [ch.id],
     )
-  ).map((q) => ({ position: q.position, prompt: q.prompt, answer: Number(q.answer), unit: q.unit, category: q.category, scoringType: q.scoring_type, voided: q.voided }));
+  ).map((q) => ({
+    position: q.position, prompt: q.prompt, answer: Number(q.answer), unit: q.unit, category: q.category,
+    scoringType: q.scoring_type, tolerance: Number(q.tolerance), difficulty: q.difficulty, voided: q.voided,
+  }));
 
   const attempts = await db.query<{
     id: string; player_id: string; status: "in_progress" | "completed"; total_score: number; rounds_finished: number; started_at: Date;
@@ -111,4 +118,34 @@ export async function dayAnswers(date: string): Promise<DayAnswers> {
       rounds: byAttempt.get(a.id) ?? {},
     })),
   };
+}
+
+export type QuestionFlag = { key: "too_easy" | "too_strict" | "lost"; label: string; hint: string };
+
+/**
+ * Quality flags from how people actually played a question (needs 5+ answers):
+ *  - too easy: 40%+ got it exactly
+ *  - 50%+ scored under 100 → either "too strict" (the typical guess was
+ *    reasonable, the tolerance wasn't) or "everyone was lost" (guesses were
+ *    all over the place: the question had no way in).
+ */
+export function questionFlags(q: AnswerQuestion, rounds: AnswerRound[]): QuestionFlag[] {
+  const played = rounds.filter((r) => r.status !== "open");
+  const answered = played.filter((r) => r.status === "answered" && r.guess !== null);
+  if (answered.length < 5) return [];
+  const flags: QuestionFlag[] = [];
+  const exact = answered.filter((r) => r.score === 1000).length / answered.length;
+  if (exact >= 0.4) flags.push({ key: "too_easy", label: "Too easy", hint: `${Math.round(exact * 100)}% got it exactly` });
+  const low = played.filter((r) => (r.score ?? 0) < 100).length / played.length;
+  if (low >= 0.5) {
+    const sorted = answered.map((r) => r.guess!).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const medianScore = scoreGuess({ type: q.scoringType, tolerance: q.tolerance }, q.answer, median);
+    flags.push(
+      medianScore >= 300
+        ? { key: "too_strict", label: "Too strict", hint: `${Math.round(low * 100)}% scored under 100, but the typical guess was reasonable` }
+        : { key: "lost", label: "Everyone was lost", hint: `${Math.round(low * 100)}% scored under 100 and guesses were all over the place` },
+    );
+  }
+  return flags;
 }

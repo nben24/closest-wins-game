@@ -44,6 +44,9 @@ export const ResearchSchema = z.object({
 });
 export type Research = z.infer<typeof ResearchSchema>;
 
+/** Independent double-check answer (no web, no sight of the proposed answer). */
+export const CrossCheckSchema = z.object({ answer: z.number().nullable() });
+
 /**
  * Convert a Zod schema into the strict JSON Schema subset accepted by
  * structured outputs: every object closed (additionalProperties: false), all

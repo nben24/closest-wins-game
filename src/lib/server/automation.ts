@@ -57,7 +57,7 @@ export async function runDailyMaintenance(budgetMs = 240_000): Promise<Record<st
         const quantity = Math.max(5, Math.min(s.maxQuestionsPerJob, need));
         try {
           log.autoJob = await createJob(
-            { quantity, categories: [...CATEGORIES], difficulty: { easy: 40, medium: 45, hard: 15 }, instructions: "" },
+            { quantity, categories: [...CATEGORIES], difficulty: { easy: 40, medium: 40, hard: 20 }, instructions: "" },
             "system:auto-replenish",
             "auto",
           );

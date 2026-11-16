@@ -3,8 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
 import { env } from "@/lib/env";
 import { estimateCostUsd } from "@/lib/server/ai/pricing";
-import { proposalSystemPrompt, proposalUserPrompt, RESEARCH_SYSTEM, researchUserPrompt } from "@/lib/server/ai/prompts";
-import { ProposalBatchSchema, ResearchSchema, toStrictJsonSchema, type Proposal, type Research } from "@/lib/server/ai/schemas";
+import { CROSS_CHECK_SYSTEM, crossCheckUserPrompt, proposalSystemPrompt, proposalUserPrompt, RESEARCH_SYSTEM, researchUserPrompt } from "@/lib/server/ai/prompts";
+import { CrossCheckSchema, ProposalBatchSchema, ResearchSchema, toStrictJsonSchema, type Proposal, type Research } from "@/lib/server/ai/schemas";
 
 export interface CallUsage {
   purpose: string;
@@ -30,6 +30,8 @@ export interface AiProvider {
   model: string;
   propose(input: ProposeInput): Promise<{ proposals: unknown[]; usage: CallUsage[] }>;
   research(p: Proposal, maxTokens: number): Promise<{ research: Research; usage: CallUsage[] }>;
+  /** Optional cheap second opinion used by relaxed auto-approval. */
+  crossCheck?(p: Proposal): Promise<{ answer: number | null; usage: CallUsage[] }>;
 }
 
 export class AiError extends Error {
@@ -182,6 +184,11 @@ export class ClaudeProvider implements AiProvider {
       input.maxTokens,
     );
     return { proposals: data.questions as unknown[], usage };
+  }
+
+  async crossCheck(p: Proposal) {
+    const { data, usage } = await this.structured("cross_check", CrossCheckSchema, CROSS_CHECK_SYSTEM, crossCheckUserPrompt(p), 2000);
+    return { answer: data.answer, usage };
   }
 
   async research(p: Proposal, maxTokens: number) {

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { onboard, playRound, typeOnKeypad, waitForAnswering } from "./helpers";
+import { onboard, playRound, typeGuess, typeOnKeypad, waitForAnswering } from "./helpers";
 
 test("a guest plays all five with practice, refresh, timeout auto-submit and sharing", async ({ page, context, browserName }) => {
   const exposed: string[] = [];
@@ -27,7 +27,7 @@ test("a guest plays all five with practice, refresh, timeout auto-submit and sha
   await page.getByRole("button", { name: "Show the question" }).click();
   await expect(page.getByRole("button", { name: "Lock it in" })).toBeDisabled();
   await waitForAnswering(page);
-  await typeOnKeypad(page, "100");
+  await typeGuess(page, "100");
   await page.getByRole("button", { name: "Lock it in" }).click();
   await expect(page.getByText("Your guess")).toBeVisible();
   await page.getByRole("button", { name: "Next question" }).click();
@@ -42,7 +42,7 @@ test("a guest plays all five with practice, refresh, timeout auto-submit and sha
   const after = Number((await page.getByRole("timer").textContent())!.replace("s", ""));
   expect(after).toBeLessThanOrEqual(before);
   expect(after).toBeLessThan(10);
-  await typeOnKeypad(page, "5");
+  await typeGuess(page, "5");
   await page.getByRole("button", { name: "Lock it in" }).click();
   await page.getByRole("button", { name: "Next question" }).click();
 

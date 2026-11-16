@@ -5,7 +5,8 @@ import { sameSubject, similarity } from "@/lib/similarity";
  * Pick a balanced set of five questions for one day.
  *
  * Rules (strict pass first, then progressively relaxed):
- *  1. Difficulty mix: target easy, easy, medium, medium, hard; never more than
+ *  1. Difficulty mix: target easy, easy, medium, medium, hard — i.e. 2 "might
+ *     know this", 2 "reason it out", 1 "stretch"; never more than
  *     one hard question (two only in an emergency reserve fill).
  *  2. Five different categories where possible.
  *  3. No near-duplicate subjects within the day or with recently used subjects.

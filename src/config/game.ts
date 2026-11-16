@@ -47,6 +47,8 @@ export const TIMING = {
 
 /** Weekly standings: best N daily scores per Monday–Sunday week. */
 export const WEEKLY_COUNTED_DAYS = 5;
+/** Weekly top-3 finishers get a private prize claim code starting with this week (a Monday). */
+export const PRIZE_CODES_FROM_WEEK = "2026-11-16";
 
 /** Prompts longer than this are flagged: they must be readable in ~4 seconds. */
 export const MAX_PROMPT_CHARS = 120;

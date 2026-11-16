@@ -12,6 +12,8 @@ interface Props {
   allowNegative: boolean;
   showMagnitudes: boolean;
   submitLabel?: string;
+  /** Keep the keys usable but block locking in (e.g. "12" for a year question). */
+  submitDisabled?: boolean;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * there is no keyboard overlap or layout shift, and decimal / minus keys
  * appear only when the question allows them. Physical keyboards work too.
  */
-export function Keypad({ value, onChange, onSubmit, disabled, allowDecimal, allowNegative, showMagnitudes, submitLabel = "Lock it in" }: Props) {
+export function Keypad({ value, onChange, onSubmit, disabled, allowDecimal, allowNegative, showMagnitudes, submitLabel = "Lock it in", submitDisabled = false }: Props) {
   const opts = { allowDecimal, allowNegative };
   const press = (k: string) => {
     if (disabled) return;
@@ -117,7 +119,7 @@ export function Keypad({ value, onChange, onSubmit, disabled, allowDecimal, allo
           </button>
         )}
       </div>
-      <button type="button" className="btn-primary mt-2 w-full text-xl" disabled={disabled} onClick={onSubmit}>
+      <button type="button" className="btn-primary mt-2 w-full text-xl" disabled={disabled || submitDisabled} onClick={onSubmit}>
         {submitLabel}
       </button>
     </div>

@@ -5,6 +5,7 @@ import { formatPoints } from "@/lib/format";
 import { addDays, formatGameDate, isGameDate } from "@/lib/time";
 import { allTimeStats, dailyBoard, pastWeeks, weeklyBoard, type AllTimeRow, type Board, type BoardRow } from "@/lib/server/leaderboard";
 import { today } from "@/lib/server/challenges";
+import { ensurePrizeCodes } from "@/lib/server/prizes";
 
 /** Admin view of the public leaderboards. Read-only; the admin is never added as a player. */
 const NOBODY = "00000000-0000-0000-0000-000000000000";
@@ -110,6 +111,9 @@ export default async function AdminLeaderboard(props: PageProps<"/admin/leaderbo
     pastWeeks(NOBODY, 12),
     allTimeStats(),
   ]);
+  // Private claim codes for each finished week's top 3 (created on first view).
+  const codes = new Map<string, string>();
+  for (const w of champions) for (const c of await ensurePrizeCodes(w.weekStart)) codes.set(`${w.weekStart}:${c.playerId}`, c.code);
 
   const href = (over: Record<string, string>) => {
     const q = new URLSearchParams();
@@ -155,6 +159,9 @@ export default async function AdminLeaderboard(props: PageProps<"/admin/leaderbo
       </div>
 
       <Panel title="Past champions (top 3 of each finished week)">
+        <p className="mb-3 text-sm text-ink-soft">
+          From the week of Nov 16 on, each top-3 finisher sees a private prize code on their home screen. To check a prize claim, ask for the code and match it here.
+        </p>
         {champions.length === 0 ? (
           <p className="text-ink-soft">No finished weeks yet. The first one locks in after Sunday ends (New York time).</p>
         ) : (
@@ -174,6 +181,11 @@ export default async function AdminLeaderboard(props: PageProps<"/admin/leaderbo
                       <span className="min-w-0 flex-1 truncate">{r.name}</span>
                       <span className="tabular-nums text-ink-soft">{r.daysPlayed}d · avg {formatPoints(r.average ?? 0)}</span>
                       <span className="w-14 text-right font-bold tabular-nums">{formatPoints(r.total)}</span>
+                      {codes.get(`${w.weekStart}:${r.playerId}`) && (
+                        <code className="rounded bg-paper px-1.5 py-0.5 text-xs font-bold tracking-wider" title="Prize claim code — only this player sees it">
+                          {codes.get(`${w.weekStart}:${r.playerId}`)}
+                        </code>
+                      )}
                     </li>
                   ))}
                 </ol>

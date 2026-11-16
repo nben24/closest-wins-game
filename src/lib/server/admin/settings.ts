@@ -5,6 +5,8 @@ export interface AppSettings {
   autoGenerate: boolean;
   autoApprove: boolean;
   autoSchedule: boolean;
+  /** strict: the source page must confirm the number. relaxed: AI-found source + independent AI double-check agree. */
+  approvalMode: "strict" | "relaxed";
   inventoryThresholdDays: number;
   scheduleAheadDays: number;
   maxQuestionsPerJob: number;
@@ -24,6 +26,7 @@ export async function getSettings(): Promise<AppSettings> {
     autoGenerate: r!.auto_generate as boolean,
     autoApprove: r!.auto_approve as boolean,
     autoSchedule: r!.auto_schedule as boolean,
+    approvalMode: r!.approval_mode === "relaxed" ? "relaxed" : "strict",
     inventoryThresholdDays: r!.inventory_threshold_days as number,
     scheduleAheadDays: r!.schedule_ahead_days as number,
     maxQuestionsPerJob: r!.max_questions_per_job as number,
@@ -42,6 +45,7 @@ export async function updateSettings(patch: Partial<Omit<AppSettings, "updatedAt
     autoGenerate: "auto_generate",
     autoApprove: "auto_approve",
     autoSchedule: "auto_schedule",
+    approvalMode: "approval_mode",
     inventoryThresholdDays: "inventory_threshold_days",
     scheduleAheadDays: "schedule_ahead_days",
     maxQuestionsPerJob: "max_questions_per_job",

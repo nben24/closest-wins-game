@@ -5,7 +5,7 @@ import { Keypad } from "@/components/Keypad";
 import { displayInput } from "@/lib/client/number-input";
 import { formatWords } from "@/lib/format";
 import { categoryLabel, formatHint } from "@/lib/labels";
-import type { ScoringType } from "@/lib/scoring";
+import { isPlausibleYear, type ScoringType } from "@/lib/scoring";
 
 export { categoryLabel, formatHint };
 
@@ -30,6 +30,9 @@ interface Props {
 export function QuestionCard(p: Props) {
   const num = p.value && p.value !== "-" && p.value !== "." ? Number(p.value) : null;
   const words = num !== null && Number.isFinite(num) && p.scoringType !== "year" ? formatWords(num) : null;
+  // "0" or "12" for a year is a slip, not a guess: don't let it be locked in.
+  const badYear = p.scoringType === "year" && num !== null && !isPlausibleYear(num);
+  const hint = badYear ? "That doesn't look like a year yet — enter 4 digits, like 1995" : formatHint(p.scoringType, p.allowDecimal, p.allowNegative);
   return (
     <div className="flex flex-col gap-2">
       <section className="card px-4 py-3 sm:p-5" aria-labelledby="question-prompt">
@@ -59,7 +62,7 @@ export function QuestionCard(p: Props) {
           </output>
           {p.unit && <span className="shrink-0 text-xl font-bold text-ink-soft">{p.unit}</span>}
         </div>
-        <p className="mt-0.5 text-sm text-ink-soft [@media(max-height:620px)]:hidden">{words ? `≈ ${words} · ` : ""}{formatHint(p.scoringType, p.allowDecimal, p.allowNegative)}</p>
+        <p className={`mt-0.5 text-sm [@media(max-height:620px)]:hidden ${badYear ? "font-bold text-sun" : "text-ink-soft"}`}>{words ? `≈ ${words} · ` : ""}{hint}</p>
       </div>
       {p.statusNote && <p className="text-center text-base font-semibold text-ink-soft" role="status">{p.statusNote}</p>}
 
@@ -67,7 +70,8 @@ export function QuestionCard(p: Props) {
         <Keypad
           value={p.value}
           onChange={p.onChange}
-          onSubmit={p.onSubmit}
+          onSubmit={badYear ? () => {} : p.onSubmit}
+          submitDisabled={badYear}
           disabled={!p.inputEnabled}
           allowDecimal={p.allowDecimal}
           allowNegative={p.allowNegative}

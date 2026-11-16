@@ -158,4 +158,72 @@ describe("production approval gates", () => {
     expect((await eligiblePool(db, true)).length).toBeGreaterThan(20);
     expect((await eligiblePool(db, false)).length).toBe(0);
   });
+
+  describe("relaxed auto-approval", () => {
+    class CrossCheckingProvider extends FakeProvider {
+      crossCalls = 0;
+      constructor(proposals: unknown[], researchFor: (p: Proposal) => Research, public independent: number | null) {
+        super(proposals, researchFor);
+      }
+      async crossCheck() {
+        this.crossCalls++;
+        return { answer: this.independent, usage: [usage("cross_check")] };
+      }
+    }
+    const pageBlocked = async (): Promise<SourceCheck> => ({ status: "inaccessible", detail: "The site blocked automated access.", checkedAt: "" });
+
+    it("approves when research found a source and the independent double-check agrees", async () => {
+      await updateSettings({ autoApprove: true, approvalMode: "relaxed" }, "admin");
+      setSourceCheckerForTests(pageBlocked);
+      const fake = new CrossCheckingProvider([proposal()], () => research(), 4);
+      setAiProviderForTests(fake);
+      await advanceJob(await createJob(params, "admin"), 10_000);
+      expect(fake.crossCalls).toBe(1);
+      const q = await db.one<{ status: string; verification_status: string; approved_by: string }>(
+        "select status, verification_status, approved_by from questions where provenance = 'ai'",
+      );
+      expect(q).toMatchObject({ status: "approved", verification_status: "auto_passed", approved_by: "auto-approve" });
+    });
+
+    it("sets it aside when the double-check disagrees", async () => {
+      await updateSettings({ autoApprove: true, approvalMode: "relaxed" }, "admin");
+      setSourceCheckerForTests(pageBlocked);
+      setAiProviderForTests(new CrossCheckingProvider([proposal()], () => research(), 9));
+      const job = await advanceJob(await createJob(params, "admin"), 10_000);
+      expect(job!.held_count).toBe(1);
+      const c = await db.one<{ reasons: string[] }>("select reasons from generation_candidates");
+      expect(c!.reasons.join(" ")).toMatch(/double-check disagreed/);
+      expect((await eligiblePool(db, false)).length).toBe(0);
+    });
+
+    it("never runs the double-check when the research itself didn't support the answer", async () => {
+      await updateSettings({ autoApprove: true, approvalMode: "relaxed" }, "admin");
+      const fake = new CrossCheckingProvider([proposal()], () => research({ verdict: "contradicted", value_in_source: 5 }), 4);
+      setAiProviderForTests(fake);
+      await advanceJob(await createJob(params, "admin"), 10_000);
+      expect(fake.crossCalls).toBe(0);
+      expect((await db.one<{ status: string }>("select status from questions where provenance = 'ai'"))!.status).toBe("review");
+    });
+
+    it("strict mode ignores the double-check entirely", async () => {
+      await updateSettings({ autoApprove: true, approvalMode: "strict" }, "admin");
+      setSourceCheckerForTests(pageBlocked);
+      const fake = new CrossCheckingProvider([proposal()], () => research(), 4);
+      setAiProviderForTests(fake);
+      await advanceJob(await createJob(params, "admin"), 10_000);
+      expect(fake.crossCalls).toBe(0);
+      expect((await db.one<{ status: string }>("select status from questions where provenance = 'ai'"))!.status).toBe("review");
+    });
+  });
+
+  it("stores fairer (never tighter) tolerances on new questions", async () => {
+    setAiProviderForTests(
+      new FakeProvider(
+        [proposal({ prompt: "How many feet long is a regulation bowling lane, foul line to headpin?", subject: "bowling lane length", answer: 60, unit: "feet", scoring_type: "ratio", tolerance: 1.15, difficulty: "medium" })],
+        () => research({ value_in_source: 60, unit_in_source: "feet", excerpt: "A regulation lane is 60 feet from the foul line to the head pin." }),
+      ),
+    );
+    await advanceJob(await createJob(params, "admin"), 10_000);
+    expect((await db.one<{ tolerance: number }>("select tolerance from questions where provenance = 'ai'"))!.tolerance).toBe(1.5);
+  });
 });

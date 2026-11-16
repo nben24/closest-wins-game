@@ -10,6 +10,7 @@ import { now } from "@/lib/server/clock";
 import { ApiError } from "@/lib/server/errors";
 import { audit, notifyAdmin } from "@/lib/server/notify";
 import { checkSource, type SourceCheck } from "@/lib/server/source-check";
+import { fairTolerance, scoreGuess } from "@/lib/scoring";
 
 /**
  * Durable, resumable generation jobs.
@@ -396,6 +397,52 @@ export function decide(p: Proposal, research: Research, source: SourceCheck, dup
   return { status: "accepted", reasons: [], checks, verification: "auto_passed" };
 }
 
+/**
+ * Relaxed auto-approval, step 1 (pure): the research step itself must have found
+ * a source that supports this exact answer, with no conflict or ambiguity.
+ * Returns blocking reasons (empty = eligible for the double-check).
+ */
+export function relaxedBlockers(p: Proposal, research: Research): string[] {
+  const out: string[] = [];
+  if (research.verdict !== "supported") out.push(`research verdict was "${research.verdict}"`);
+  if (research.conflicting_sources) out.push("sources conflict");
+  if (research.is_ambiguous) out.push("possibly ambiguous");
+  if (!research.family_friendly) out.push("not family friendly");
+  if (!valuesMatch(p.answer, research.value_in_source)) out.push("the source's number doesn't match the answer");
+  if (!research.source_url || !research.source_title || !research.excerpt) out.push("no source link, title and quote were recorded");
+  return out;
+}
+
+/**
+ * Relaxed auto-approval, step 2 (pure): does an independent answer (from a model
+ * that never saw the proposed answer) land within the question's tolerance?
+ */
+export function crossCheckAgrees(p: Proposal, independent: number | null): boolean {
+  if (independent === null || !Number.isFinite(independent)) return false;
+  const tolerance = fairTolerance(p.scoring_type, p.tolerance, p.answer, p.difficulty);
+  return scoreGuess({ type: p.scoring_type, tolerance }, p.answer, independent) >= 500;
+}
+
+/** Runs the double-check (counts against the limits). Returns null when approved, else the reason it wasn't. */
+async function relaxedCheck(job: JobRow, c: CandidateRow, research: Research, s: AppSettings, provider: AiProvider): Promise<string | null> {
+  const blockers = relaxedBlockers(c.proposal, research);
+  if (blockers.length) return `Relaxed auto-approve skipped: ${blockers.join("; ")}.`;
+  if (!provider.crossCheck) return "Relaxed auto-approve skipped: the AI double-check isn't available.";
+  const db = await getDb();
+  const problem = await budgetProblem(db, job, s);
+  if (problem) return `Relaxed auto-approve skipped: ${problem}`;
+  try {
+    const r = await provider.crossCheck(c.proposal);
+    await recordUsage(db, job.id, c.id, r.usage);
+    if (crossCheckAgrees(c.proposal, r.answer)) return null;
+    return `AI double-check disagreed: it answered ${r.answer ?? "\"don't know\""} (proposed answer ${c.proposal.answer}).`;
+  } catch (e) {
+    const err = e instanceof AiError ? e : new AiError("Double-check failed.");
+    await recordUsage(db, job.id, c.id, err.usage, err.message);
+    return `AI double-check could not run: ${err.message}`;
+  }
+}
+
 async function verifyCandidate(job: JobRow, c: CandidateRow, s: AppSettings, provider: AiProvider): Promise<void> {
   const db = await getDb();
   const p = c.proposal;
@@ -444,6 +491,16 @@ async function verifyCandidate(job: JobRow, c: CandidateRow, s: AppSettings, pro
     ? await sourceChecker(research.source_url, research.excerpt, p.answer)
     : ({ status: "invalid_url", detail: "The research step returned no source URL or excerpt.", checkedAt: now().toISOString() } as SourceCheck);
   const d = decide(p, research, source, dupHits);
+  if (d.status === "held" && s.autoApprove && s.approvalMode === "relaxed") {
+    const why = await relaxedCheck(job, c, research, s, provider);
+    if (why === null) {
+      const notes = ["Approved in relaxed mode: research found a supporting source and an independent AI double-check agreed.", ...d.reasons.map((r) => `(Relaxed past: ${r})`)];
+      await finishCandidate(job, c, "accepted", notes, d.checks, research, source, "auto_passed", s, true);
+      return;
+    }
+    await finishCandidate(job, c, d.status, [...d.reasons, why], d.checks, research, source, d.verification, s);
+    return;
+  }
   await finishCandidate(job, c, d.status, d.reasons, d.checks, research, source, d.verification, s);
 }
 
@@ -457,6 +514,8 @@ async function finishCandidate(
   source: SourceCheck | null,
   verification: "auto_passed" | "needs_review" | "failed",
   s: AppSettings,
+  /** Relaxed mode already approved this candidate. */
+  forceApprove = false,
 ): Promise<void> {
   const db = await getDb();
   await db.tx(async (sql) => {
@@ -464,7 +523,10 @@ async function finishCandidate(
     if (status !== "rejected") {
       const p = c.proposal;
       const draft = proposalToDraft(p, research);
-      const autoApprove = status === "accepted" && s.autoApprove && source?.status === "supported" && !checks.some((x) => x.level !== "info");
+      const autoApprove =
+        forceApprove || (status === "accepted" && s.autoApprove && source?.status === "supported" && !checks.some((x) => x.level !== "info"));
+      // Fairer tolerance floors (never tighter than the proposal).
+      draft.tolerance = fairTolerance(draft.scoringType, draft.tolerance, draft.answer, draft.difficulty);
       const notes = [
         ...reasons.map((m) => ({ level: status === "held" ? "warning" : "info", message: m })),
         ...(source ? [{ level: source.status === "supported" ? "info" : "warning", message: `Source check: ${source.detail}` }] : []),
@@ -485,7 +547,7 @@ async function finishCandidate(
           draft.scoringType, draft.tolerance, draft.allowDecimal, draft.allowNegative, draft.explanation.slice(0, 600),
           draft.sourceUrl, draft.sourceTitle, draft.sourceExcerpt?.slice(0, 2000) ?? null, draft.referencePeriod,
           normalizeSubject(p.subject || p.prompt), normalizePrompt(p.prompt), autoApprove ? "approved" : "review",
-          verification, JSON.stringify(notes), source?.status === "supported" ? now() : null, job.id, c.id,
+          verification, JSON.stringify(notes), source?.status === "supported" || forceApprove ? now() : null, job.id, c.id,
           autoApprove ? now() : null, autoApprove ? "auto-approve" : null,
         ],
       );
