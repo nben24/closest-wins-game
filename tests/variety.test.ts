@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db";
 import { wordingChecks } from "@/lib/content-checks";
-import { relaxedBlockers } from "@/lib/server/ai/pipeline";
+import { cleanPlayerPeriod } from "@/lib/format";
+import { arithmeticProblems, relaxedBlockers } from "@/lib/server/ai/pipeline";
+import { researchUserPrompt } from "@/lib/server/ai/prompts";
 import type { Proposal, Research } from "@/lib/server/ai/schemas";
 import { classifyQuestion, crowdedTypes, GENERATABLE_TYPES, perJobTypeCap, planTypes, type QuestionType } from "@/lib/question-types";
 import { pickDailySet, type PoolQuestion } from "@/lib/scheduler";
@@ -188,5 +190,41 @@ describe("wording traps", () => {
     } as Research;
     expect(relaxedBlockers(p, r).join(" ")).toMatch(/one specific season/);
     expect(relaxedBlockers({ ...p, prompt: "How many home runs did Barry Bonds hit in his record-setting 2001 MLB season?" }, r)).toEqual([]);
+  });
+});
+
+describe("accuracy checks", () => {
+  const STEELERS = [6, 15, 11, 8, 10, 12, 9, 12, 12, 8, 8, 11, 10, 11, 13, 9, 8, 12, 9, 9, 10, 10];
+  const seasons = STEELERS.map((v, i) => ({ label: String(2003 + i), value: v }));
+  const p = {
+    prompt: "How many regular-season games did the Pittsburgh Steelers win from 2003 through 2024 combined?", answer: 177, unit: "wins",
+    category: "sports", difficulty: "medium", scoring_type: "ratio", question_type: "team_stats", tolerance: 1.5, reference_period: "2003-2024 NFL regular seasons",
+  } as Proposal;
+  const r = { value_in_source: 223, components: seasons, combine: "sum" } as Research;
+
+  it("re-adds season totals and catches a wrong answer", () => {
+    expect(arithmeticProblems(p, r).join(" ")).toMatch(/gives 223, but the question's answer is 177/);
+    expect(arithmeticProblems({ ...p, answer: 223 }, r)).toEqual([]);
+  });
+  it("catches a missing season and a misreported total", () => {
+    expect(arithmeticProblems({ ...p, answer: 213 }, { ...r, value_in_source: 213, components: seasons.slice(1) }).join(" ")).toMatch(/lists 21 seasons but the question covers 22/);
+    expect(arithmeticProblems({ ...p, answer: 223 }, { ...r, value_in_source: 230 }).join(" ")).toMatch(/work out to 223, not the 230/);
+  });
+  it("requires a breakdown for totals and both years for gaps", () => {
+    expect(arithmeticProblems({ ...p, answer: 223 }, { ...r, components: [], combine: "none" }).join(" ")).toMatch(/no season-by-season breakdown/);
+    const gap = { prompt: "How many years passed between Jackie Robinson's MLB debut and Michael Jordan's first NBA championship?", answer: 44, question_type: "years_between", scoring_type: "ratio" } as Proposal;
+    expect(arithmeticProblems(gap, { value_in_source: 44, combine: "difference", components: [{ label: "Robinson debut", value: 1947 }, { label: "Jordan title", value: 1991 }] } as Research)).toEqual([]);
+    expect(arithmeticProblems({ ...gap, answer: 45 }, { value_in_source: 44, combine: "difference", components: [{ label: "a", value: 1947 }, { label: "b", value: 1991 }] } as Research)).not.toEqual([]);
+  });
+  it("never shows the fact-checker the proposed answer or explanation", () => {
+    const text = researchUserPrompt({ ...p, explanation: "The Steelers won 177 games." } as Proposal & { explanation: string });
+    expect(text).not.toContain("177");
+    expect(text).toContain("Pittsburgh Steelers");
+  });
+  it("shows players a short time frame, never research notes", () => {
+    expect(cleanPlayerPeriod("2001 MLB season")).toBe("2001 MLB season");
+    expect(cleanPlayerPeriod("Not stated; current product label on a retailer page, one brand")).toBeNull();
+    expect(cleanPlayerPeriod("None stated. The NPS page is undated.")).toBeNull();
+    expect(cleanPlayerPeriod(null)).toBeNull();
   });
 });

@@ -43,10 +43,15 @@ describe("relaxed approval rules", () => {
     expect(relaxedBlockers(p, { ...r, verdict: "not_found" })).not.toEqual([]);
     expect(relaxedBlockers(p, { ...r, value_in_source: 50 })).not.toEqual([]);
   });
-  it("accepts a double-check within tolerance only", () => {
+  it("accepts a double-check only when it lands on (nearly) the same fact", () => {
     expect(crossCheckAgrees(p, 42)).toBe(true);
-    expect(crossCheckAgrees(p, 50)).toBe(true);
+    expect(crossCheckAgrees(p, 45)).toBe(true);
+    expect(crossCheckAgrees(p, 50)).toBe(false);
     expect(crossCheckAgrees(p, 120)).toBe(false);
+    // Steelers: 177 proposed vs ~223 is "close enough to score" for a player, but not the same fact.
+    expect(crossCheckAgrees({ ...p, answer: 177, question_type: "team_stats" } as Proposal, 215)).toBe(false);
+    expect(crossCheckAgrees({ ...p, answer: 1955, scoring_type: "year" } as Proposal, 1956)).toBe(true);
+    expect(crossCheckAgrees({ ...p, answer: 1955, scoring_type: "year" } as Proposal, 1958)).toBe(false);
     expect(crossCheckAgrees(p, null)).toBe(false);
   });
 });

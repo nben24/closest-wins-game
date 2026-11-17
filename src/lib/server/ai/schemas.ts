@@ -37,6 +37,11 @@ export const ResearchSchema = z.object({
   value_in_source: z.number().nullable(),
   unit_in_source: z.string().nullable(),
   reference_period: z.string().nullable(),
+  /** Short time-frame label shown to players on the reveal (null when timeless). */
+  player_period: z.string().nullable().default(null),
+  /** For computed answers: each season/event value, which the app re-adds. */
+  components: z.array(z.object({ label: z.string(), value: z.number() })).default([]),
+  combine: z.enum(["none", "sum", "difference"]).default("none"),
   matches_wording: z.boolean(),
   ambiguity_notes: z.string(),
   is_ambiguous: z.boolean(),
@@ -57,7 +62,7 @@ export const CrossCheckSchema = z.object({ answer: z.number().nullable() });
  */
 export function toStrictJsonSchema(schema: z.ZodType): Record<string, unknown> {
   const raw = z.toJSONSchema(schema, { target: "draft-7", io: "output" }) as Record<string, unknown>;
-  const DROP = new Set(["$schema", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "pattern", "format", "minItems", "maxItems"]);
+  const DROP = new Set(["$schema", "default", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "pattern", "format", "minItems", "maxItems"]);
   const walk = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(walk);
     if (!node || typeof node !== "object") return node;

@@ -56,3 +56,16 @@ export function describeMiss(type: ScoringType, answer: number, guess: number, u
   }
   return `${formatNumber(Math.abs(diff))} ${unit} too ${dir}`.replace(/\s+/g, " ");
 }
+
+/**
+ * A reference period fit to show players on the reveal: short and about the
+ * fact's time frame. Research notes ("Not stated; the page is undated…") are
+ * hidden. Returns null when there's nothing worth showing.
+ */
+export function cleanPlayerPeriod(text: string | null | undefined): string | null {
+  const t = (text ?? "").trim().replace(/\s+/g, " ");
+  if (!t || t.length > 48) return null;
+  if (/^(none|not stated|n\/?a|unknown|undated|no (specific|date|period|year)|not (a time|time-dependent|applicable)|null)\b/i.test(t)) return null;
+  if (/\b(page|source|fetched|snapshot|website|article|wikipedia|retailer|search result)\b/i.test(t)) return null;
+  return t;
+}

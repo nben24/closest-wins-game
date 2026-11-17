@@ -10,7 +10,8 @@ import { now } from "@/lib/server/clock";
 import { ApiError } from "@/lib/server/errors";
 import { audit, notifyAdmin } from "@/lib/server/notify";
 import { checkSource, type SourceCheck } from "@/lib/server/source-check";
-import { fairTolerance, scoreGuess } from "@/lib/scoring";
+import { cleanPlayerPeriod } from "@/lib/format";
+import { fairTolerance } from "@/lib/scoring";
 import { crowdedTypes, perJobTypeCap, planTypes, typeOf, type QuestionType } from "@/lib/question-types";
 import { STORED_TYPE_SQL } from "@/lib/server/challenges";
 
@@ -364,6 +365,11 @@ async function proposeBatch(job: JobRow, count: number, s: AppSettings, provider
   );
 }
 
+/** The short time frame players see on the reveal (never research notes). */
+function playerPeriodFor(p: Proposal, r?: Research | null): string | null {
+  return cleanPlayerPeriod(r?.player_period) ?? cleanPlayerPeriod(p.reference_period);
+}
+
 function proposalToDraft(p: Proposal, r?: Research | null): QuestionDraft {
   return {
     prompt: p.prompt,
@@ -393,6 +399,40 @@ function valuesMatch(expected: number, found: number | null): boolean {
   return Math.abs(expected - found) <= tol;
 }
 
+/**
+ * Re-do the fact-checker's arithmetic (pure). Totals over seasons must come with
+ * a season-by-season breakdown that adds up, covers every season in the
+ * question, and matches the proposed answer; "years between" questions must
+ * come with both years. Returns problems (empty = the math checks out).
+ */
+export function arithmeticProblems(p: Proposal, r: Research): string[] {
+  const out: string[] = [];
+  const comps = (r.components ?? []).filter((c) => Number.isFinite(c.value));
+  const prompt = String(p.prompt ?? "");
+  const type = typeOf({ storedType: p.question_type, prompt, scoringType: p.scoring_type, unit: p.unit, category: p.category });
+  const needs = type === "team_stats" ? "sum" : type === "years_between" ? "difference" : null;
+  if (needs && (r.combine !== needs || comps.length < 2)) {
+    out.push(needs === "sum" ? "no season-by-season breakdown was given, so the total couldn't be re-added" : "the two event years weren't given, so the gap couldn't be re-checked");
+    return out;
+  }
+  let computed: number | null = null;
+  if (r.combine === "sum" && comps.length) computed = Math.round(comps.reduce((a, c) => a + c.value, 0) * 1000) / 1000;
+  if (r.combine === "difference" && comps.length >= 2) computed = Math.abs(comps[comps.length - 1].value - comps[0].value);
+  if (computed === null) return out;
+  if (r.value_in_source !== null && !valuesMatch(computed, r.value_in_source)) {
+    out.push(`the fact-checker's own numbers work out to ${computed}, not the ${r.value_in_source} it reported`);
+  }
+  if (!valuesMatch(p.answer, computed)) out.push(`re-adding the fact-checker's numbers gives ${computed}, but the question's answer is ${p.answer}`);
+  if (type === "team_stats" && r.combine === "sum") {
+    const years = [...prompt.matchAll(/\b(?:19|20)\d\d\b/g)].map((m) => Number(m[0]));
+    if (years.length >= 2) {
+      const expected = Math.max(...years) - Math.min(...years) + 1;
+      if (comps.length !== expected) out.push(`the breakdown lists ${comps.length} seasons but the question covers ${expected}`);
+    }
+  }
+  return out;
+}
+
 export type Decision = { status: "accepted" | "held" | "rejected"; reasons: string[]; checks: CheckResult[]; verification: "auto_passed" | "needs_review" | "failed" };
 
 /** Pure decision logic (unit-tested). */
@@ -417,7 +457,8 @@ export function decide(p: Proposal, research: Research, source: SourceCheck, dup
   if (research.conflicting_sources) reasons.push("Sources conflict.");
   if (research.is_ambiguous) reasons.push(`Possibly ambiguous: ${research.ambiguity_notes || "see notes"}`);
   if (!research.matches_wording) reasons.push("Evidence does not match the question's wording, unit or period exactly.");
-  if (!valuesMatch(p.answer, research.value_in_source)) reasons.push(`Value in source (${research.value_in_source ?? "none"}) does not match the answer (${p.answer}).`);
+  if (!valuesMatch(p.answer, research.value_in_source)) reasons.push(`The fact-checker found ${research.value_in_source ?? "no number"}${research.unit_in_source ? ` ${research.unit_in_source}` : ""}, but the question's answer is ${p.answer}.`);
+  for (const a of arithmeticProblems(p, research)) reasons.push(`Math check: ${a}.`);
   if (research.source_url) {
     try {
       const host = new URL(research.source_url).hostname;
@@ -447,6 +488,7 @@ export function relaxedBlockers(p: Proposal, research: Research): string[] {
   if (!valuesMatch(p.answer, research.value_in_source)) out.push("the source's number doesn't match the answer");
   if (!research.source_url || !research.source_title || !research.excerpt) out.push("no source link, title and quote were recorded");
   for (const w of wordingChecks(proposalToDraft(p, research))) out.push(w.message);
+  for (const a of arithmeticProblems(p, research)) out.push(`math check: ${a}`);
   return out;
 }
 
@@ -456,8 +498,16 @@ export function relaxedBlockers(p: Proposal, research: Research): string[] {
  */
 export function crossCheckAgrees(p: Proposal, independent: number | null): boolean {
   if (independent === null || !Number.isFinite(independent)) return false;
-  const tolerance = fairTolerance(p.scoring_type, p.tolerance, p.answer, p.difficulty);
-  return scoreGuess({ type: p.scoring_type, tolerance }, p.answer, independent) >= 500;
+  // Verification is much stricter than player scoring: "close enough to score
+  // points" is not "the same fact". 177 vs 223 wins must disagree.
+  const a = p.answer;
+  const diff = Math.abs(a - independent);
+  if (p.scoring_type === "year") return diff <= 1;
+  if (p.scoring_type === "percent") return diff <= 3;
+  if (p.scoring_type === "absolute") return diff <= Math.max(1, Math.abs(a) * 0.1);
+  const type = typeOf({ storedType: p.question_type, prompt: p.prompt ?? "", scoringType: p.scoring_type, unit: p.unit, category: p.category });
+  const rel = type === "scale" || type === "everyday_math" ? 0.2 : 0.1;
+  return diff <= Math.abs(a) * rel;
 }
 
 /** Runs the double-check (counts against the limits). Returns null when approved, else the reason it wasn't. */
@@ -568,6 +618,10 @@ async function finishCandidate(
         ...reasons.map((m) => ({ level: status === "held" ? "warning" : "info", message: m })),
         ...(source ? [{ level: source.status === "supported" ? "info" : "warning", message: `Source check: ${source.detail}` }] : []),
         ...(research ? [{ level: "info", message: `Research verdict: ${research.verdict}; source type: ${research.source_type}. ${research.notes}`.slice(0, 600) }] : []),
+        ...(research?.reference_period ? [{ level: "info", message: `Research time frame: ${research.reference_period}`.slice(0, 600) }] : []),
+        ...(research?.combine && research.combine !== "none" && research.components?.length
+          ? [{ level: "info", message: `Math check (${research.combine}): ${research.components.map((x) => `${x.label}: ${x.value}`).join(", ")}`.slice(0, 1200) }]
+          : []),
         ...(research && research.suggested_difficulty !== p.difficulty
           ? [{ level: "info", message: `Research step suggests difficulty "${research.suggested_difficulty}" (proposed "${p.difficulty}").` }]
           : []),
@@ -582,7 +636,7 @@ async function finishCandidate(
         [
           draft.prompt.trim(), draft.answer, draft.unit, draft.category, draft.difficulty,
           draft.scoringType, draft.tolerance, draft.allowDecimal, draft.allowNegative, draft.explanation.slice(0, 600),
-          draft.sourceUrl, draft.sourceTitle, draft.sourceExcerpt?.slice(0, 2000) ?? null, draft.referencePeriod,
+          draft.sourceUrl, draft.sourceTitle, draft.sourceExcerpt?.slice(0, 2000) ?? null, playerPeriodFor(p, research),
           normalizeSubject(p.subject || p.prompt), normalizePrompt(p.prompt), autoApprove ? "approved" : "review",
           verification, JSON.stringify(notes), source?.status === "supported" || forceApprove ? now() : null, job.id, c.id,
           autoApprove ? now() : null, autoApprove ? "auto-approve" : null,
@@ -660,7 +714,7 @@ export async function draftFromCandidate(candidateId: string, actor: string): Pr
     [
       String(p.prompt ?? "").slice(0, 300), Number(p.answer) || 0, String(p.unit ?? ""), p.category, p.difficulty, p.scoring_type, Number(p.tolerance) || 1.5,
       Boolean(p.allow_decimal), Boolean(p.allow_negative), String(p.explanation ?? "").slice(0, 600),
-      c.research?.source_url ?? null, c.research?.source_title ?? null, c.research?.excerpt ?? null, c.research?.reference_period ?? p.reference_period ?? null,
+      c.research?.source_url ?? null, c.research?.source_title ?? null, c.research?.excerpt ?? null, playerPeriodFor(p, c.research),
       normalizeSubject(String(p.subject ?? p.prompt ?? "")), normalizePrompt(String(p.prompt ?? "")),
       JSON.stringify((c.reasons ?? []).map((m) => ({ level: "warning", message: m }))), c.job_id, c.id, actor,
     ],

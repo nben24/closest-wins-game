@@ -1,4 +1,5 @@
 import "server-only";
+import { cleanPlayerPeriod } from "@/lib/format";
 import { getDb } from "@/lib/db";
 import { TIMING } from "@/config/game";
 import { now } from "@/lib/server/clock";
@@ -79,7 +80,7 @@ export async function getResults(playerId: string, date: string): Promise<Result
       explanation: r.explanation,
       sourceUrl: r.source_url,
       sourceTitle: r.source_title,
-      referencePeriod: r.reference_period,
+      referencePeriod: cleanPlayerPeriod(r.reference_period),
       tolerance: r.tolerance,
       voided: r.voided,
       voidedReason: r.voided_reason,

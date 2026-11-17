@@ -22,6 +22,7 @@ function research(over: Partial<Research> = {}): Research {
   return {
     verdict: "supported", source_url: "https://www.example-orchestra.org/violin", source_title: "The violin", source_type: "primary",
     excerpt: "The violin has four strings tuned in perfect fifths.", value_in_source: 4, unit_in_source: "strings", reference_period: null,
+    player_period: null, components: [], combine: "none",
     matches_wording: true, ambiguity_notes: "", is_ambiguous: false, family_friendly: true, suggested_difficulty: "easy",
     conflicting_sources: false, notes: "",
     ...over,

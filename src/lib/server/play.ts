@@ -1,4 +1,5 @@
 import "server-only";
+import { cleanPlayerPeriod } from "@/lib/format";
 import { QUESTIONS_PER_DAY, TIMING } from "@/config/game";
 import { getDb, isUniqueViolation, type Sql } from "@/lib/db";
 import { parseGuess, scoreGuess, type ScoringType } from "@/lib/scoring";
@@ -145,7 +146,7 @@ function roundView(r: RoundRow, s: SnapshotRow): RoundView {
           explanation: s.explanation,
           sourceUrl: s.source_url,
           sourceTitle: s.source_title,
-          referencePeriod: s.reference_period,
+          referencePeriod: cleanPlayerPeriod(s.reference_period),
           tolerance: s.tolerance,
           voided: s.voided,
           voidedReason: s.voided_reason,
