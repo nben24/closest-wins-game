@@ -13,7 +13,7 @@ const usage = (purpose: string): CallUsage => ({ purpose, model: "fake", inputTo
 function proposal(over: Partial<Proposal> = {}): Proposal {
   return {
     prompt: "How many strings does a standard violin have?", answer: 4, unit: "strings", category: "entertainment", difficulty: "easy",
-    scoring_type: "absolute", tolerance: 1.5, allow_decimal: false, allow_negative: false,
+    scoring_type: "absolute", question_type: "count", tolerance: 1.5, allow_decimal: false, allow_negative: false,
     explanation: "Four strings tuned G, D, A and E.", subject: "violin strings", reference_period: null, why_estimable: "common knowledge", suggested_source_url: null,
     ...over,
   };
@@ -34,7 +34,9 @@ class FakeProvider implements AiProvider {
   model = "fake";
   researchCalls = 0;
   constructor(public proposals: unknown[], public researchFor: (p: Proposal) => Research) {}
-  async propose(input: { count: number }) {
+  inputs: { count: number; typePlan?: string[]; crowdedTypes?: string[] }[] = [];
+  async propose(input: { count: number; typePlan?: string[]; crowdedTypes?: string[] }) {
+    this.inputs.push(input);
     const out = this.proposals.splice(0, input.count);
     return { proposals: out, usage: [usage("propose")] };
   }
@@ -62,6 +64,19 @@ const params = { quantity: 1, categories: [], difficulty: { easy: 40, medium: 40
 describe("generation pipeline", () => {
   it("is disabled without credentials", async () => {
     await expect(createJob(params, "admin")).rejects.toMatchObject({ code: "ai_not_configured" });
+  });
+
+  it("asks each batch for different, under-represented question types", async () => {
+    const fake = new FakeProvider([proposal()], () => research());
+    setAiProviderForTests(fake);
+    const id = await createJob({ ...params, quantity: 4 }, "admin");
+    await advanceJob(id, 10_000);
+    const first = fake.inputs[0];
+    expect(first.typePlan!.length).toBe(first.count);
+    expect(new Set(first.typePlan).size).toBe(first.count);
+    // The demo bank is full of "what year" and "how many" questions: they are crowded, not planned.
+    expect(first.crowdedTypes).toContain("year");
+    expect(first.typePlan).not.toContain("year");
   });
 
   it("accepts well-supported candidates into the review queue (not auto-published)", async () => {

@@ -8,7 +8,7 @@ import { CATEGORIES, DIFFICULTIES } from "@/lib/content-checks";
 import { SCORING_TYPES } from "@/lib/scoring";
 import { requireAdmin } from "@/lib/server/admin/auth";
 import { approveQuestion, createManualQuestion, setQuestionStatus, updateQuestion, voidQuestion, type SaveInput } from "@/lib/server/admin/questions";
-import { resolveNotification, swapQuestion, unscheduleDay } from "@/lib/server/admin/ops";
+import { rebuildUpcoming, resolveNotification, swapQuestion, unscheduleDay } from "@/lib/server/admin/ops";
 import { updateSettings } from "@/lib/server/admin/settings";
 import { advanceJob, cancelJob, createJob, draftFromCandidate, regenerateCandidate, resumeJob, reverifyCandidate } from "@/lib/server/ai/pipeline";
 import { fillSchedule, today } from "@/lib/server/challenges";
@@ -212,6 +212,18 @@ export async function fillScheduleAction(_prev: FormState, f: FormData): Promise
   return r.missing.length
     ? { error: `Scheduled ${r.created.length} day(s). Not enough balanced approved questions for ${r.missing.length} day(s) starting ${r.missing[0]}.` }
     : { message: `Scheduled ${r.created.length} day(s).` };
+}
+
+export async function rebuildScheduleAction(_prev: FormState, f: FormData): Promise<FormState> {
+  const admin = await requireAdmin();
+  if (!bool(f, "confirm")) return { error: "Tick the confirmation box." };
+  try {
+    const r = await rebuildUpcoming(admin.actor);
+    revalidatePath("/admin/schedule");
+    return { message: `Rebuilt ${r.dates.length} upcoming day(s) with more variety.` };
+  } catch (e) {
+    return { error: msg(e) };
+  }
 }
 
 export async function scheduleOpAction(f: FormData): Promise<void> {

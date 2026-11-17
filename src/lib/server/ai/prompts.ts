@@ -1,5 +1,6 @@
 import { CATEGORIES } from "@/lib/content-checks";
 import { MAX_PROMPT_CHARS } from "@/config/game";
+import { QUESTION_TYPES, TYPE_INFO, type QuestionType } from "@/lib/question-types";
 
 export const CONTENT_GUIDELINES = `Closest Wins is a daily estimation game for friends and families (ages ~10 and up).
 Players see each question for 4 seconds, then have 10 seconds to type a number. Closer guesses score more.
@@ -9,15 +10,17 @@ adult can reason toward from everyday life and land within about 2× of the answ
 typing a random number, it's a bad question.
 
 The three difficulty levels mean:
-- "easy" = "you might know this": well-known trivia where many players can get it exactly or very close
-  (famous years, sports facts, everyday counts). Still not so obvious that everyone gets it exactly.
-- "medium" = "reason it out": most people won't know it exactly but can estimate well from everyday experience
-  (how many teeth a dog has, the price of a familiar product, how long something takes).
+- "easy" = "you might know this": well-known trivia where many players can get it exactly or very close.
+  Still not so obvious that everyone gets it exactly (never things like stripes on the flag or holes in golf).
+- "medium" = "reason it out": most people won't know it exactly but can estimate well from everyday experience.
 - "hard" = "stretch": harder, but still in everyday terms with a way in. Never a random obscure statistic.
 
 What makes a great question:
-- A familiar subject (everyday objects, food and drink, animals and nature, well-known movies/music/TV,
-  familiar geography and distances, products and launch prices, sports, accessible science and technology).
+- A familiar subject (everyday life, food and drink, animals and nature, well-known movies/music/TV/games,
+  places, brands and inventions, sports, the human body, accessible science and technology).
+- Not a tiny count: avoid answers under 5 unless the question is genuinely hard to reason about.
+- Variety matters as much as accuracy: the game gets boring when every question is "what year", "how far",
+  "what did it cost" or "how many calories". Follow the question-type plan you are given.
 - Everyday US units: feet, miles, pounds, dollars, minutes, years, counts. Never metric-only or scientific units
   (no meters per second, kilometers, liters, cubic anything, kelvin, joules, light-years).
 - Never scientific constants or huge physical quantities (speed of sound or light, volumes of lakes or oceans,
@@ -42,8 +45,23 @@ Scoring setup (choose per question; be generous — "pretty close" should earn r
 - "absolute": small counts (< ~20), values that can be zero or negative; tolerance in the question's unit.
 Set allow_decimal true only if a decimal answer is reasonable; allow_negative only if the answer can be negative.`;
 
+const CATEGORY_GUIDE = `Categories (pick the one a player would expect):
+- everyday: household objects, money, daily life and habits, cars, travel, walking and exercise habits
+- food: food, drink, cooking, restaurants
+- animals: animals and plants
+- entertainment: movies, TV, music, books, toys, video and board games
+- geography: places, landmarks, buildings, cities, rivers, maps
+- products: brands, gadgets, inventions, companies
+- sports: sports, teams and athletes only
+- science: the human body, space, nature, physics, technology facts
+For a question combining two facts, use the category of the more familiar fact.`;
+
+const TYPE_GUIDE = `Question types ("question_type"; set it to the type you actually wrote):
+${QUESTION_TYPES.filter((t) => t !== "other").map((t) => `- ${t}: ${TYPE_INFO[t].describe}`).join("\n")}
+- other: none of the above`;
+
 export function proposalSystemPrompt(): string {
-  return `You write questions for a numerical estimation game.\n\n${CONTENT_GUIDELINES}\n\nCategories: ${CATEGORIES.join(", ")}.
+  return `You write questions for a numerical estimation game.\n\n${CONTENT_GUIDELINES}\n\n${CATEGORY_GUIDE}\nAllowed category values: ${CATEGORIES.join(", ")}.\n\n${TYPE_GUIDE}
 Return only questions you believe are factually correct and verifiable from a reliable, preferably primary, public source.
 "explanation" is a 1–2 sentence reveal that makes players think "oh wow" (max 300 characters).
 "subject" is a short 2–5 word key for the underlying fact (used for duplicate detection).
@@ -57,11 +75,21 @@ export function proposalUserPrompt(opts: {
   difficulty: { easy: number; medium: number; hard: number };
   instructions: string;
   avoidSubjects: string[];
+  typePlan?: string[];
+  crowdedTypes?: string[];
 }): string {
+  const plan = (opts.typePlan ?? []).filter((t): t is QuestionType => t in TYPE_INFO);
+  const planText = plan.length
+    ? `Question-type plan (write one question of each type below; every one still needs a way in):
+${plan.map((t, i) => `${i + 1}. ${t} — ${TYPE_INFO[t].describe}`).join("\n")}
+If a planned type can't fit the chosen categories, use another type from the list that isn't crowded.
+${opts.crowdedTypes?.length ? `The question bank already has plenty of these types; avoid them: ${opts.crowdedTypes.join(", ")}.\n` : ""}Every question in this batch must be a different type, and don't reuse the same pattern twice (e.g. two "years between X and the Moon landing").
+${opts.instructions ? "If the administrator's notes below ask for a specific kind of question, the notes win over this plan.\n" : ""}`
+    : "";
   return `Propose ${opts.count} new questions.
 Categories to use (spread evenly): ${opts.categories.join(", ")}.
 Difficulty mix (approximate %): easy ${opts.difficulty.easy}, medium ${opts.difficulty.medium}, hard ${opts.difficulty.hard}.
-${opts.instructions ? `Administrator's notes for this batch:\n<admin_notes>\n${opts.instructions}\n</admin_notes>\n` : ""}
+${planText}${opts.instructions ? `Administrator's notes for this batch:\n<admin_notes>\n${opts.instructions}\n</admin_notes>\n` : ""}
 Do not repeat these existing subjects (or close variants of them):
 <existing_subjects>
 ${opts.avoidSubjects.join("\n") || "(none yet)"}
@@ -83,8 +111,14 @@ Research rules (keep it economical):
 - Fetch the most authoritative page you find. Prefer primary sources (official organizations, manufacturers,
   government agencies, governing bodies, studios, peer-reviewed or encyclopedic institutional sources). Use secondary sources
   only if no primary source is available.
-- "excerpt" must be copied VERBATIM from the fetched page (one or two sentences, max ~400 characters) and must contain the number.
+- "excerpt" must be copied VERBATIM from the fetched page (one or two sentences, max ~400 characters) and must contain the number
+  (for a computed answer, the key component number).
 - If sources disagree, set conflicting_sources true and explain.
+- Computed answers: if the answer is derived from several facts (years between two events, a total from a
+  span of seasons, a count worked out from sizes), verify EACH component fact from a reliable source, then check
+  the arithmetic yourself. If every component is confirmed and the math is right, the verdict is "supported":
+  set value_in_source to the computed result, quote the key component in "excerpt", and list every component
+  value and its source in "notes". Only use "unclear" if a component can't be confirmed.
 - Check that the question wording, unit and reference period match the evidence exactly. If the number in the best source
   differs from the proposed answer (beyond trivial rounding), use verdict "contradicted" and report the source's value.
 - Judge ambiguity honestly: could two reasonable players interpret the prompt differently and get different answers?

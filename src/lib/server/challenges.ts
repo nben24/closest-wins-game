@@ -2,7 +2,8 @@ import "server-only";
 import { QUESTIONS_PER_DAY } from "@/config/game";
 import { getDb, type Sql } from "@/lib/db";
 import { env } from "@/lib/env";
-import { pickDailySet, type PoolQuestion } from "@/lib/scheduler";
+import { typeOf } from "@/lib/question-types";
+import { pickDailySet, type NearbyQuestion, type PoolQuestion } from "@/lib/scheduler";
 import { addDays, challengeNumber, gameDateOf } from "@/lib/time";
 import { now } from "@/lib/server/clock";
 import { audit, notifyAdmin } from "@/lib/server/notify";
@@ -25,27 +26,38 @@ async function lockDate(sql: Sql, date: string): Promise<void> {
   await sql.query("select pg_advisory_xact_lock(hashtext($1))", [`challenge:${date}`]);
 }
 
+/**
+ * SQL for a question's stored type: the type the AI generator chose (kept on
+ * its candidate). Questions without one are classified from their wording.
+ */
+export const STORED_TYPE_SQL = "(select gc.proposal->>'question_type' from generation_candidates gc where gc.id = q.candidate_id)";
+
+type TypedRow = { prompt: string; storedType: string | null; scoringType: string; unit: string; category: string };
 /** Approved questions never used in any challenge. Demo content only where allowed. */
 export async function eligiblePool(sql: Sql, allowDemo = env.allowDemoContent): Promise<PoolQuestion[]> {
-  return sql.query<PoolQuestion>(
-    `select q.id, q.prompt, q.category, q.difficulty, q.subject_key as "subjectKey"
+  const rows = await sql.query<Omit<PoolQuestion, "type"> & TypedRow>(
+    `select q.id, q.prompt, q.category, q.difficulty, q.subject_key as "subjectKey",
+            q.scoring_type as "scoringType", q.unit, ${STORED_TYPE_SQL} as "storedType"
        from questions q
       where q.status = 'approved'
         and ($1 or not q.is_demo)
         and not exists (select 1 from challenge_questions cq where cq.question_id = q.id)`,
     [allowDemo],
   );
+  return rows.map((r) => ({ id: r.id, prompt: r.prompt, category: r.category, difficulty: r.difficulty, subjectKey: r.subjectKey, type: typeOf(r) }));
 }
 
-async function recentSubjects(sql: Sql, date: string, windowDays = 30) {
-  return sql.query<{ prompt: string; subjectKey: string }>(
-    `select q.prompt, q.subject_key as "subjectKey"
+async function recentSubjects(sql: Sql, date: string, windowDays = 30): Promise<NearbyQuestion[]> {
+  const rows = await sql.query<{ prompt: string; subjectKey: string; date: string } & TypedRow>(
+    `select q.prompt, q.subject_key as "subjectKey", dc.challenge_date as date, q.category,
+            q.scoring_type as "scoringType", q.unit, ${STORED_TYPE_SQL} as "storedType"
        from challenge_questions cq
        join daily_challenges dc on dc.id = cq.challenge_id
        join questions q on q.id = cq.question_id
       where dc.challenge_date between $1::date and $2::date and dc.challenge_date <> $3::date`,
     [addDays(date, -windowDays), addDays(date, windowDays), date],
   );
+  return rows.map((r) => ({ prompt: r.prompt, subjectKey: r.subjectKey, date: String(r.date), category: r.category, type: typeOf(r) }));
 }
 
 /** Create a scheduled (not yet published) challenge for a date if there is none. */
@@ -58,7 +70,7 @@ export async function scheduleDate(
   const existing = await sql.one<ChallengeRow>("select * from daily_challenges where challenge_date = $1", [date]);
   if (existing) return existing;
   const pool = await eligiblePool(sql);
-  const picked = pickDailySet(pool, { seed: date, recent: await recentSubjects(sql, date), emergency: opts.emergency });
+  const picked = pickDailySet(pool, { seed: date, date, recent: await recentSubjects(sql, date), emergency: opts.emergency });
   if (!picked) return null;
   const demoCount = (
     await sql.query<{ n: number }>("select count(*)::int as n from questions where id = any($1::uuid[]) and is_demo", [
@@ -92,8 +104,9 @@ export async function publishChallenge(sql: Sql, challengeId: string, actor: str
   if (!ch) throw new Error("challenge not found");
   if (ch.status === "published") return ch;
 
-  const slots = await sql.query<{ position: number; question_id: string; status: string; is_demo: boolean; difficulty: string }>(
-    `select cq.position, cq.question_id, q.status, q.is_demo, q.difficulty
+  const slots = await sql.query<{ position: number; question_id: string; status: string; is_demo: boolean; difficulty: string } & TypedRow>(
+    `select cq.position, cq.question_id, q.status, q.is_demo, q.difficulty, q.prompt, q.category,
+            q.scoring_type as "scoringType", q.unit, ${STORED_TYPE_SQL} as "storedType"
        from challenge_questions cq join questions q on q.id = cq.question_id
       where cq.challenge_id = $1 order by cq.position`,
     [challengeId],
@@ -111,14 +124,21 @@ export async function publishChallenge(sql: Sql, challengeId: string, actor: str
     }
     const need = [...bad.map((b) => ({ position: b.position, difficulty: b.difficulty })), ...missingPositions.map((p) => ({ position: p, difficulty: "medium" }))];
     const usedIds = new Set(keep.map((k) => k.question_id));
+    const dayTypes = new Set<string>(keep.map((k) => typeOf(k)));
+    const dayCats = new Set(keep.map((k) => k.category));
     for (const n of need) {
+      // Same difficulty, and a type/category the day doesn't have yet, when possible.
+      const free = pool.filter((q) => !usedIds.has(q.id));
+      const fresh = (q: PoolQuestion) => !dayTypes.has(q.type) && !dayCats.has(q.category);
       const choice =
-        pool.find((q) => !usedIds.has(q.id) && q.difficulty === n.difficulty) ?? pool.find((q) => !usedIds.has(q.id));
+        free.find((q) => q.difficulty === n.difficulty && fresh(q)) ?? free.find((q) => q.difficulty === n.difficulty) ?? free.find(fresh) ?? free[0];
       if (!choice) {
         await notifyAdmin("publish_failed", "error", `Could not publish ${ch.challenge_date}: no approved replacement question.`, `publish:${ch.challenge_date}`, sql);
         throw new Error("no replacement available");
       }
       usedIds.add(choice.id);
+      dayTypes.add(choice.type);
+      dayCats.add(choice.category);
       await sql.query("insert into challenge_questions (challenge_id, position, question_id) values ($1, $2, $3)", [
         challengeId,
         n.position,

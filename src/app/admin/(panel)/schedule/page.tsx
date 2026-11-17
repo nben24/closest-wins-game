@@ -1,4 +1,4 @@
-import { fillScheduleAction, scheduleOpAction, voidAction } from "@/app/admin/actions";
+import { fillScheduleAction, rebuildScheduleAction, scheduleOpAction, voidAction } from "@/app/admin/actions";
 import { ActionForm } from "@/components/admin/ActionForm";
 import { Badge, inputCls, Panel } from "@/components/admin/ui";
 import { formatValue } from "@/lib/format";
@@ -7,6 +7,7 @@ import { listChallenges } from "@/lib/server/admin/ops";
 import { eligiblePool, inventoryStatus, today } from "@/lib/server/challenges";
 import { getDb } from "@/lib/db";
 import type { ScoringType } from "@/lib/scoring";
+import { TYPE_INFO } from "@/lib/question-types";
 
 export default async function SchedulePage() {
   const t = today();
@@ -28,7 +29,19 @@ export default async function SchedulePage() {
             <label className="text-sm font-bold">From<input type="date" name="from" defaultValue={addDays(t, 1)} min={t} className={inputCls} /></label>
             <label className="text-sm font-bold">Days<input type="number" name="days" defaultValue={14} min={1} max={60} className={inputCls} /></label>
           </div>
-          <p className="mt-2 text-sm text-ink-soft">Picks 5 approved questions per day: different categories, at most one hard, no near-duplicate subjects within ±30 days, gentle order.</p>
+          <p className="mt-2 text-sm text-ink-soft">
+            Picks 5 approved questions per day: different categories (so one sports question at most), different question types, no type the
+            neighbouring days already use, at most one hard, no near-duplicate subjects within ±30 days, gentle order.
+          </p>
+        </ActionForm>
+      </Panel>
+      <Panel title="Rebuild upcoming days">
+        <ActionForm action={rebuildScheduleAction} submitLabel="Rebuild upcoming days">
+          <p className="text-sm text-ink-soft">
+            Re-picks every scheduled day after today using the variety rules above. Today and past days are never touched. Any manual swaps on
+            those days are replaced. If there aren&apos;t enough approved questions to rebuild all of them, nothing changes.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" name="confirm" /> Replace the upcoming schedule</label>
         </ActionForm>
       </Panel>
 
@@ -51,7 +64,7 @@ export default async function SchedulePage() {
             {c.questions.map((q) => (
               <li key={q.position} className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2 first:border-0 first:pt-0">
                 <span className="min-w-0 flex-1">
-                  <strong>Q{q.position}.</strong> {q.prompt} <span className="text-ink-soft">→ {formatValue(q.answer, types.get(q.questionId) ?? "ratio")} {q.unit} · {q.category} · {q.difficulty}</span>
+                  <strong>Q{q.position}.</strong> {q.prompt} <span className="text-ink-soft">→ {formatValue(q.answer, types.get(q.questionId) ?? "ratio")} {q.unit} · {q.category} · {q.difficulty} · <em>{TYPE_INFO[q.type].label}</em></span>
                   {q.status !== "approved" && c.status === "scheduled" && <span className="ml-1"><Badge tone="warning">{`now ${q.status} — will be replaced at publish`}</Badge></span>}
                   {q.voided && <span className="ml-1"><Badge tone="rejected">voided</Badge></span>}
                 </span>
@@ -59,7 +72,7 @@ export default async function SchedulePage() {
                   <form action={scheduleOpAction} className="flex gap-1">
                     <input type="hidden" name="op" value="swap" /><input type="hidden" name="challengeId" value={c.id} /><input type="hidden" name="position" value={q.position} />
                     <select name="questionId" className="max-w-56 rounded-lg border border-line px-1 py-1 text-xs" aria-label={`Replacement for Q${q.position}`}>
-                      {pool.slice(0, 200).map((p) => <option key={p.id} value={p.id}>[{p.difficulty}/{p.category}] {p.prompt.slice(0, 60)}</option>)}
+                      {pool.slice(0, 200).map((p) => <option key={p.id} value={p.id}>[{p.difficulty}/{p.category}/{TYPE_INFO[p.type].label}] {p.prompt.slice(0, 60)}</option>)}
                     </select>
                     <button className="rounded-lg border border-line px-2 py-1 text-xs font-semibold">Swap</button>
                   </form>

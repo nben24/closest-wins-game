@@ -22,6 +22,10 @@ export interface ProposeInput {
   difficulty: { easy: number; medium: number; hard: number };
   instructions: string;
   avoidSubjects: string[];
+  /** One question type per question, chosen for variety (see planTypes). */
+  typePlan?: string[];
+  /** Types the bank already has plenty of. */
+  crowdedTypes?: string[];
   maxTokens: number;
 }
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CATEGORIES, DIFFICULTIES } from "@/lib/content-checks";
+import { QUESTION_TYPES } from "@/lib/question-types";
 import { SCORING_TYPES } from "@/lib/scoring";
 
 /** One proposed question (before any verification). */
@@ -10,6 +11,8 @@ export const ProposalSchema = z.object({
   category: z.enum(CATEGORIES),
   difficulty: z.enum(DIFFICULTIES),
   scoring_type: z.enum(SCORING_TYPES),
+  /** The kind of question (see src/lib/question-types.ts); used for variety. */
+  question_type: z.enum(QUESTION_TYPES),
   tolerance: z.number(),
   allow_decimal: z.boolean(),
   allow_negative: z.boolean(),

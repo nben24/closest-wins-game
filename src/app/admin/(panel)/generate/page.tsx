@@ -50,8 +50,12 @@ export default async function GeneratePage() {
             </fieldset>
             <label className="mt-4 block text-sm font-bold">
               Instructions (optional)
-              <textarea name="instructions" rows={2} maxLength={1000} className={inputCls} placeholder='e.g. "Generate 30 approachable food questions."' />
+              <textarea name="instructions" rows={2} maxLength={1000} className={inputCls} placeholder='Leave blank for an automatic variety mix. Use it only for extras, e.g. "Make these sports team questions."' />
             </label>
+            <p className="mt-1 text-xs text-ink-soft">
+              Variety is automatic: each batch of 5 gets different question types (years between, scale comparisons, polls, hidden counts, how long
+              things take…), weighted toward the types your bank has least of, and no type makes up more than about 1 in 8 of a job (e.g. at most 3 of one type in a batch of 20).
+            </p>
             <p className="mt-2 text-sm text-ink-soft">
               Runs in the background in small batches: propose → research with web search → independent source check → quality, safety and duplicate checks.
               Results go to the review queue{settings.autoApprove ? " (auto-approve is ON for candidates that pass every check)" : ""}. Proposals are capped at

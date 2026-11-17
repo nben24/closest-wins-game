@@ -1,7 +1,8 @@
 import "server-only";
 import { getDb } from "@/lib/db";
 import { addDays } from "@/lib/time";
-import { today } from "@/lib/server/challenges";
+import { scheduleDate, STORED_TYPE_SQL, today } from "@/lib/server/challenges";
+import { typeOf, type QuestionType } from "@/lib/question-types";
 import { ApiError } from "@/lib/server/errors";
 import { audit } from "@/lib/server/notify";
 
@@ -12,7 +13,7 @@ export interface UpcomingChallenge {
   status: string;
   isDemo: boolean;
   source: string;
-  questions: { position: number; questionId: string; prompt: string; category: string; difficulty: string; answer: number; unit: string; voided: boolean; status: string }[];
+  questions: { position: number; questionId: string; prompt: string; category: string; difficulty: string; answer: number; unit: string; voided: boolean; status: string; type: QuestionType }[];
   attempts: number;
   completed: number;
 }
@@ -27,15 +28,17 @@ export async function listChallenges(from: string, days: number): Promise<Upcomi
   );
   const out: UpcomingChallenge[] = [];
   for (const c of chs) {
-    const qs = await db.query<{ position: number; question_id: string; prompt: string; category: string; difficulty: string; answer: number; unit: string; voided: boolean; status: string }>(
+    const qs = await db.query<{ position: number; question_id: string; prompt: string; category: string; difficulty: string; answer: number; unit: string; voided: boolean; status: string; scoring_type: string; stored_type: string | null }>(
       `select cq.position, cq.question_id, coalesce(cq.prompt, q.prompt) as prompt, q.category, q.difficulty,
-              coalesce(cq.answer, q.answer) as answer, coalesce(cq.unit, q.unit) as unit, cq.voided, q.status
+              coalesce(cq.answer, q.answer) as answer, coalesce(cq.unit, q.unit) as unit, cq.voided, q.status,
+              q.scoring_type, ${STORED_TYPE_SQL} as stored_type
          from challenge_questions cq join questions q on q.id = cq.question_id where cq.challenge_id = $1 order by cq.position`,
       [c.id],
     );
     out.push({
       id: c.id, date: c.challenge_date, number: c.number, status: c.status, isDemo: c.is_demo, source: c.source, attempts: c.attempts, completed: c.completed,
-      questions: qs.map((q) => ({ position: q.position, questionId: q.question_id, prompt: q.prompt, category: q.category, difficulty: q.difficulty, answer: q.answer, unit: q.unit, voided: q.voided, status: q.status })),
+      questions: qs.map((q) => ({ position: q.position, questionId: q.question_id, prompt: q.prompt, category: q.category, difficulty: q.difficulty, answer: q.answer, unit: q.unit, voided: q.voided, status: q.status,
+        type: typeOf({ storedType: q.stored_type, prompt: q.prompt, scoringType: q.scoring_type, unit: q.unit, category: q.category }) })),
     });
   }
   return out;
@@ -51,6 +54,31 @@ export async function unscheduleDay(challengeId: string, actor: string): Promise
     if (c.challenge_date <= today()) throw new ApiError(400, "today", "Today's challenge can't be unscheduled.");
     await sql.query("delete from daily_challenges where id = $1", [challengeId]);
     await audit(actor, "unschedule", "daily_challenge", challengeId, { date: c.challenge_date }, sql);
+  });
+}
+
+/**
+ * Re-pick every scheduled (unpublished) day after today with the current
+ * variety rules. All-or-nothing: if the reserve can't fill every one of those
+ * days, nothing changes. Published days (today and earlier) are never touched.
+ */
+export async function rebuildUpcoming(actor: string): Promise<{ dates: string[] }> {
+  const db = await getDb();
+  return db.tx(async (sql) => {
+    const days = await sql.query<{ id: string; challenge_date: string }>(
+      "select id, challenge_date from daily_challenges where status = 'scheduled' and challenge_date > $1 order by challenge_date for update",
+      [today()],
+    );
+    if (days.length === 0) throw new ApiError(400, "nothing", "There are no upcoming scheduled days to rebuild.");
+    await sql.query("delete from daily_challenges where id = any($1::uuid[])", [days.map((d) => d.id)]);
+    for (const d of days) {
+      const ch = await scheduleDate(sql, d.challenge_date, { source: "manual", actor });
+      if (!ch) {
+        throw new ApiError(409, "short", `Not enough approved questions to rebuild ${d.challenge_date} with variety. Nothing was changed — approve more questions and try again.`);
+      }
+    }
+    await audit(actor, "rebuild_schedule", "daily_challenge", null, { dates: days.map((d) => d.challenge_date) }, sql);
+    return { dates: days.map((d) => d.challenge_date) };
   });
 }
 

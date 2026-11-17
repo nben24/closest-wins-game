@@ -1,4 +1,5 @@
 import { QUESTIONS_PER_DAY } from "@/config/game";
+import type { QuestionType } from "@/lib/question-types";
 import { sameSubject, similarity } from "@/lib/similarity";
 
 /**
@@ -8,8 +9,13 @@ import { sameSubject, similarity } from "@/lib/similarity";
  *  1. Difficulty mix: target easy, easy, medium, medium, hard — i.e. 2 "might
  *     know this", 2 "reason it out", 1 "stretch"; never more than
  *     one hard question (two only in an emergency reserve fill).
- *  2. Five different categories where possible.
- *  3. No near-duplicate subjects within the day or with recently used subjects.
+ *  2. Five different categories where possible (so at most one sports question).
+ *  3. Five different question types ("what year", "how far", "price"…) where possible.
+ *  4. No category three days in a row, no type that the neighbouring days
+ *     already use, and types seen less in
+ *     the surrounding two weeks are preferred — so the same kind of question
+ *     doesn't come back day after day.
+ *  5. No near-duplicate subjects within the day or with recently used subjects.
  * Selection is deterministic for a given seed (the date), so reruns are stable.
  * Final order: easy, medium, easy, hard, medium (a gentle start, no stacking).
  */
@@ -20,6 +26,20 @@ export interface PoolQuestion {
   category: string;
   difficulty: "easy" | "medium" | "hard";
   subjectKey: string;
+  type: QuestionType;
+}
+
+/** A question used on another day near the one being picked. */
+export interface NearbyQuestion {
+  prompt: string;
+  subjectKey: string;
+  date?: string;
+  type?: QuestionType;
+  category?: string;
+}
+
+function dayGap(a: string, b: string): number {
+  return Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
 }
 
 function hashSeed(seed: string): number {
@@ -51,32 +71,57 @@ const ORDER: Record<PoolQuestion["difficulty"], number[]> = { easy: [0, 2], medi
 
 export function pickDailySet(
   pool: PoolQuestion[],
-  opts: { seed: string; recent?: { prompt: string; subjectKey: string }[]; emergency?: boolean },
+  opts: { seed: string; date?: string; recent?: NearbyQuestion[]; emergency?: boolean },
 ): PoolQuestion[] | null {
   const rand = seededRandom(opts.seed);
+  const recent = opts.recent ?? [];
+  const date = opts.date ?? opts.seed;
+  const near = (days: number) => recent.filter((r) => r.date && dayGap(r.date, date) <= days);
+  const adjacentTypes = new Set(near(1).map((r) => r.type).filter(Boolean));
+  const typeSeen = new Map<string, number>();
+  const catSeen = new Map<string, number>();
+  for (const r of near(7)) if (r.type) typeSeen.set(r.type, (typeSeen.get(r.type) ?? 0) + 1);
+  // Categories: the day before/after counts double, two days away counts once.
+  for (const r of near(2)) if (r.category) catSeen.set(r.category, (catSeen.get(r.category) ?? 0) + (r.date && dayGap(r.date, date) <= 1 ? 2 : 1));
+
+  // A category on two neighbouring days in a row would make a streak of three: avoid it.
+  const catsOn = (offset: number) => new Set(recent.filter((r) => r.date && r.category && dayGap(r.date, date) === Math.abs(offset) && (offset < 0 ? r.date < date : r.date > date)).map((r) => r.category!));
+  const [m2, m1, p1, p2] = [catsOn(-2), catsOn(-1), catsOn(1), catsOn(2)];
+  const streakCats = new Set([...m1].filter((c) => m2.has(c) || p1.has(c)).concat([...p1].filter((c) => p2.has(c))));
+
+  // Seeded shuffle, then prefer types/categories that the surrounding days used less.
   const shuffled = [...pool].sort((a, b) => a.id.localeCompare(b.id));
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  const recent = opts.recent ?? [];
+  const weight = new Map(shuffled.map((q) => [q, (typeSeen.get(q.type) ?? 0) + 0.75 * (catSeen.get(q.category) ?? 0) + rand() * 1.5]));
+  const ordered = shuffled.sort((a, b) => weight.get(a)! - weight.get(b)!);
 
-  const passes: { distinctCategories: boolean; avoidRecent: boolean; difficultyTargets: boolean; maxHard: number }[] = [
-    { distinctCategories: true, avoidRecent: true, difficultyTargets: true, maxHard: 1 },
-    { distinctCategories: false, avoidRecent: true, difficultyTargets: true, maxHard: 1 },
-    { distinctCategories: false, avoidRecent: false, difficultyTargets: true, maxHard: 1 },
-    { distinctCategories: false, avoidRecent: false, difficultyTargets: false, maxHard: 1 },
+  type Pass = { distinctCategories: boolean; distinctTypes: boolean; avoidAdjacentTypes: boolean; avoidStreaks?: boolean; avoidRecent: boolean; difficultyTargets: boolean; maxHard: number };
+  const passes: Pass[] = [
+    { distinctCategories: true, distinctTypes: true, avoidAdjacentTypes: true, avoidStreaks: true, avoidRecent: true, difficultyTargets: true, maxHard: 1 },
+    { distinctCategories: true, distinctTypes: true, avoidAdjacentTypes: false, avoidStreaks: true, avoidRecent: true, difficultyTargets: true, maxHard: 1 },
+    { distinctCategories: true, distinctTypes: true, avoidAdjacentTypes: false, avoidRecent: true, difficultyTargets: true, maxHard: 1 },
+    { distinctCategories: true, distinctTypes: false, avoidAdjacentTypes: false, avoidRecent: true, difficultyTargets: true, maxHard: 1 },
+    { distinctCategories: false, distinctTypes: true, avoidAdjacentTypes: false, avoidRecent: true, difficultyTargets: true, maxHard: 1 },
+    { distinctCategories: false, distinctTypes: false, avoidAdjacentTypes: false, avoidRecent: true, difficultyTargets: true, maxHard: 1 },
+    { distinctCategories: false, distinctTypes: false, avoidAdjacentTypes: false, avoidRecent: false, difficultyTargets: true, maxHard: 1 },
+    { distinctCategories: false, distinctTypes: false, avoidAdjacentTypes: false, avoidRecent: false, difficultyTargets: false, maxHard: 1 },
   ];
-  if (opts.emergency) passes.push({ distinctCategories: false, avoidRecent: false, difficultyTargets: false, maxHard: 2 });
+  if (opts.emergency) passes.push({ ...passes[passes.length - 1], maxHard: 2 });
 
   for (const pass of passes) {
     const picked: PoolQuestion[] = [];
     const tryPick = (want: PoolQuestion["difficulty"] | null) => {
-      for (const q of shuffled) {
+      for (const q of ordered) {
         if (picked.includes(q)) continue;
         if (want && q.difficulty !== want) continue;
         if (q.difficulty === "hard" && picked.filter((p) => p.difficulty === "hard").length >= pass.maxHard) continue;
         if (pass.distinctCategories && picked.some((p) => p.category === q.category)) continue;
+        if (pass.distinctTypes && q.type !== "other" && picked.some((p) => p.type === q.type)) continue;
+        if (pass.avoidAdjacentTypes && adjacentTypes.has(q.type)) continue;
+        if (pass.avoidStreaks && streakCats.has(q.category)) continue;
         if (conflicts(q, picked)) continue;
         if (pass.avoidRecent && conflicts(q, recent)) continue;
         picked.push(q);

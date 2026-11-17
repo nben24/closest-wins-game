@@ -11,6 +11,8 @@ import { ApiError } from "@/lib/server/errors";
 import { audit, notifyAdmin } from "@/lib/server/notify";
 import { checkSource, type SourceCheck } from "@/lib/server/source-check";
 import { fairTolerance, scoreGuess } from "@/lib/scoring";
+import { crowdedTypes, perJobTypeCap, planTypes, typeOf, type QuestionType } from "@/lib/question-types";
+import { STORED_TYPE_SQL } from "@/lib/server/challenges";
 
 /**
  * Durable, resumable generation jobs.
@@ -274,12 +276,43 @@ async function step(job: JobRow, s: AppSettings, provider: AiProvider): Promise<
   return false;
 }
 
+/**
+ * Variety by default: count question types in the live bank (unused approved,
+ * review and draft questions, plus anything played in the last 30 days) and in
+ * this job so far, then plan one different, under-represented type per question.
+ */
+async function typePlanFor(db: Sql, job: JobRow, count: number, jobTypes: (string | null)[]) {
+  const rows = await db.query<{ prompt: string; storedType: string | null; scoringType: string; unit: string; category: string }>(
+    `select q.prompt, q.scoring_type as "scoringType", q.unit, q.category, ${STORED_TYPE_SQL} as "storedType"
+       from questions q
+      where q.status in ('approved', 'review', 'draft')
+        and (not exists (select 1 from challenge_questions cq where cq.question_id = q.id)
+             or exists (select 1 from challenge_questions cq join daily_challenges dc on dc.id = cq.challenge_id
+                         where cq.question_id = q.id and dc.challenge_date >= current_date - 30))`,
+  );
+  const bank: Partial<Record<QuestionType, number>> = {};
+  for (const r of rows) {
+    const t = typeOf(r);
+    bank[t] = (bank[t] ?? 0) + 1;
+  }
+  const inJob: Partial<Record<QuestionType, number>> = {};
+  for (const t of jobTypes) {
+    const k = typeOf({ storedType: t, prompt: "" });
+    if (k !== "other") inJob[k] = (inJob[k] ?? 0) + 1;
+  }
+  return { plan: planTypes(count, bank, inJob, perJobTypeCap(job.target_count)), crowded: crowdedTypes(bank) };
+}
+
 async function proposeBatch(job: JobRow, count: number, s: AppSettings, provider: AiProvider): Promise<void> {
   const db = await getDb();
   const subjects = await db.query<{ s: string }>(
     "select coalesce(nullif(subject_key, ''), left(prompt, 60)) as s from questions where status <> 'rejected' order by created_at desc limit 400",
   );
-  const jobSubjects = await db.query<{ s: string }>("select proposal->>'subject' as s from generation_candidates where job_id = $1", [job.id]);
+  const jobSubjects = await db.query<{ s: string; t: string | null }>(
+    "select proposal->>'subject' as s, proposal->>'question_type' as t from generation_candidates where job_id = $1 and status <> 'rejected'",
+    [job.id],
+  );
+  const { plan, crowded } = await typePlanFor(db, job, count, jobSubjects.map((r) => r.t));
   await setJob(job.id, { progress_note: `Proposing ${count} question idea(s)…` });
   let result: Awaited<ReturnType<AiProvider["propose"]>>;
   try {
@@ -289,6 +322,8 @@ async function proposeBatch(job: JobRow, count: number, s: AppSettings, provider
       difficulty: job.params.difficulty,
       instructions: job.params.instructions,
       avoidSubjects: [...subjects, ...jobSubjects].map((r) => r.s).filter(Boolean),
+      typePlan: plan,
+      crowdedTypes: crowded,
       maxTokens: s.maxOutputTokensPerCall,
     });
   } catch (e) {
