@@ -30,7 +30,7 @@ What makes a great question:
   Never include another number in the prompt that players could mistake for the answer or type back in.
 - Exactly one reasonable interpretation: state the geography, time period, product size/edition or
   measurement basis when it matters. Never use "average" or "typical" without defining the population and period.
-- Players only see the prompt — never the reference period. If the answer is about one specific record, season,
+- While answering, players only see the prompt (the reference period appears after they answer). If the answer is about one specific record, season,
   game, year, edition, model or version, the prompt itself must name it; never say "in a season" or "in a game"
   when the answer is one particular record-setting one. Any year, edition or measuring point in the prompt (to the
   roof vs. to the tip, US launch vs. first launch anywhere) must match the evidence exactly.
@@ -124,7 +124,7 @@ Research rules (keep it economical):
   set value_in_source to the computed result, quote the key component in "excerpt", and list every component
   value and its source in "notes". Only use "unclear" if a component can't be confirmed.
 - Check that the question wording, unit and reference period match the evidence exactly.
-- Read the prompt as a player would, WITHOUT the reference period (players never see it). Set matches_wording false
+- Read the prompt as a player would, WITHOUT the reference period (players only see it after answering). Set matches_wording false
   if the prompt could reasonably mean a different instance than the answer (a typical season vs. the record season),
   or if a year, edition, place or measuring point in the prompt differs from the evidence (a 1979 launch that was really
   in 1980; "to the tip" when the number is the roof height). Explain the mismatch in ambiguity_notes. If the number in the best source

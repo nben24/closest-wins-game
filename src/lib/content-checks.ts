@@ -63,7 +63,7 @@ function numbersIn(text: string): number[] {
 /**
  * Wording traps a fact-check can miss because the number itself is right:
  *  - the prompt says "in a season" but the answer is one specific season
- *    (named only in the hidden reference period, which players never see);
+ *    (named only in the reference period, which players see only after answering);
  *  - the source quote has numbers, but none of them is the answer.
  */
 export function wordingChecks(q: Pick<QuestionDraft, "prompt" | "answer" | "scoringType" | "unit" | "category" | "sourceExcerpt" | "referencePeriod" | "questionType">): CheckResult[] {
@@ -77,7 +77,7 @@ export function wordingChecks(q: Pick<QuestionDraft, "prompt" | "answer" | "scor
       out.push({
         level: "warning",
         code: "unnamed_instance",
-        message: `The question says "${generic[0].trim()}" but the answer is about one specific ${generic[1]} (${years[0]}). Name it in the question — players never see the reference period.`,
+        message: `The question says "${generic[0].trim()}" but the answer is about one specific ${generic[1]} (${years[0]}). Name it in the question — players only see the reference period after they answer.`,
       });
     }
   }

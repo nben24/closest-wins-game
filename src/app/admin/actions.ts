@@ -52,7 +52,7 @@ const QuestionInput = z.object({
   sourceUrl: z.string().url().max(2000).nullable(),
   sourceTitle: z.string().max(300).nullable(),
   sourceExcerpt: z.string().max(2000).nullable(),
-  referencePeriod: z.string().max(120).nullable(),
+  referencePeriod: z.string().max(600).nullable(),
   subject: z.string().max(120),
 });
 
