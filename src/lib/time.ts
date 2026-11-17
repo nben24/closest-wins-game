@@ -93,3 +93,13 @@ export function formatGameDate(date: string, opts: Intl.DateTimeFormatOptions = 
   const [y, m, d] = date.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", { ...opts, timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
 }
+
+/** A timestamp as New York time, e.g. "Nov 16, 8:05 PM" (admin screens). */
+export function formatGameTime(t: Date | string): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: GAME_TIMEZONE, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(t));
+}
+
+/** Short, human-friendly id for a generation batch, e.g. "#a1b2c3d4". */
+export function batchId(jobId: string): string {
+  return `#${jobId.slice(0, 8)}`;
+}

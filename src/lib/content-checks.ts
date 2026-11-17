@@ -1,4 +1,5 @@
 import { MAX_PROMPT_CHARS, MAX_PROMPT_WORDS } from "@/config/game";
+import { classifyQuestion, isQuestionType, type QuestionType } from "@/lib/question-types";
 import { validateScoringConfig, type ScoringType } from "@/lib/scoring";
 
 /**
@@ -26,6 +27,8 @@ export interface QuestionDraft {
   sourceTitle: string | null;
   sourceExcerpt: string | null;
   referencePeriod: string | null;
+  /** The AI's question type, when known (otherwise classified from the wording). */
+  questionType?: string | null;
 }
 
 export interface CheckResult {
@@ -41,6 +44,57 @@ const CELEBRITY_WEALTH = /\b(net worth|fortune|richest|salary of|earns? per|wort
 const VAGUE_AVERAGE = /\b(average|typical|mean|median)\b/i;
 const HAS_SCOPE = /\b(in (the )?(us|u\.s\.|united states|uk|world|global|america|canada|europe|\d{4})|per (year|day|person|capita)|as of|according to|adult|in \d{4}|during|between)\b/i;
 const RELATIVE_TIME = /\b(currently|right now|today|this year|last year|recently|nowadays|these days)\b/i;
+
+/** Types whose answer is worked out from several facts, so the source quote won't contain it. */
+const COMPUTED_TYPES: QuestionType[] = ["years_between", "scale", "everyday_math", "team_stats"];
+
+/** "in a season", "a single game", "in one race"… — a generic instance. */
+const GENERIC_INSTANCE = /\b(?:in an?|in one|a single|single)[\s-]+(?:[a-z]+\s+)?(season|game|race|match|tournament|event|episode|album|concert|performance)\b/i;
+/** Wording that already names which instance is meant. */
+const NAMES_INSTANCE = /\b(record|record-setting|record-breaking|most|best|highest|fewest|lowest|career-high|famous)\b/i;
+
+function numbersIn(text: string): number[] {
+  const nums = (text.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => Number(n.replace(/,/g, ""))).filter(Number.isFinite);
+  // "2 hours 4 minutes" also counts as 124 (minutes).
+  for (const m of text.matchAll(/(\d+)\s*(?:hours?|hrs?|h)\b\s*(?:and\s*)?(\d+)\s*(?:minutes?|mins?|m)\b/gi)) nums.push(Number(m[1]) * 60 + Number(m[2]));
+  return nums;
+}
+
+/**
+ * Wording traps a fact-check can miss because the number itself is right:
+ *  - the prompt says "in a season" but the answer is one specific season
+ *    (named only in the hidden reference period, which players never see);
+ *  - the source quote has numbers, but none of them is the answer.
+ */
+export function wordingChecks(q: Pick<QuestionDraft, "prompt" | "answer" | "scoringType" | "unit" | "category" | "sourceExcerpt" | "referencePeriod" | "questionType">): CheckResult[] {
+  const out: CheckResult[] = [];
+  const prompt = String(q.prompt ?? "").trim();
+  if (!prompt || !Number.isFinite(q.answer)) return out;
+  const generic = prompt.match(GENERIC_INSTANCE);
+  if (generic && !NAMES_INSTANCE.test(prompt) && q.referencePeriod) {
+    const years = (q.referencePeriod.match(/\b(1[5-9]\d\d|20\d\d)\b/g) ?? []).filter((y) => !prompt.includes(y));
+    if (years.length) {
+      out.push({
+        level: "warning",
+        code: "unnamed_instance",
+        message: `The question says "${generic[0].trim()}" but the answer is about one specific ${generic[1]} (${years[0]}). Name it in the question — players never see the reference period.`,
+      });
+    }
+  }
+  const type = isQuestionType(q.questionType) && q.questionType !== "other" ? q.questionType : classifyQuestion({ prompt, scoringType: q.scoringType, unit: q.unit, category: q.category });
+  if (q.sourceExcerpt && !COMPUTED_TYPES.includes(type)) {
+    const nums = numbersIn(q.sourceExcerpt);
+    const close = (n: number) => Math.abs(n - q.answer) <= Math.max(Math.abs(q.answer) * 0.02, 0.005);
+    if (nums.length && !nums.some(close)) {
+      out.push({
+        level: "warning",
+        code: "excerpt_number",
+        message: `The source quote mentions ${nums.slice(0, 4).join(", ")}${nums.length > 4 ? "…" : ""} but not the answer (${q.answer}). Check the number.`,
+      });
+    }
+  }
+  return out;
+}
 
 export function runContentChecks(q: QuestionDraft): CheckResult[] {
   const out: CheckResult[] = [];
@@ -96,6 +150,7 @@ export function runContentChecks(q: QuestionDraft): CheckResult[] {
   if (!q.sourceTitle?.trim()) add("error", "source_title", "A source title is required.");
   if (!q.sourceExcerpt?.trim()) add("error", "source_excerpt", "A supporting excerpt from the source is required.");
   if (q.sourceUrl && /wikipedia\.org/i.test(q.sourceUrl)) add("info", "secondary_source", "Wikipedia is a secondary source — prefer a primary source where possible.");
+  out.push(...wordingChecks(q));
   return out;
 }
 

@@ -6,13 +6,15 @@ import { Badge } from "@/components/admin/ui";
 import { CATEGORIES, DIFFICULTIES } from "@/lib/content-checks";
 import { formatValue } from "@/lib/format";
 import { listQuestions } from "@/lib/server/admin/questions";
+import { listJobs } from "@/lib/server/ai/pipeline";
+import { batchId, formatGameTime } from "@/lib/time";
 
 export default async function QuestionsPage(props: PageProps<"/admin/questions">) {
   const sp = await props.searchParams;
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : undefined);
   const page = Math.max(0, Number(one("page") ?? 0) || 0);
-  const filter = { q: one("q"), status: one("status"), category: one("category"), difficulty: one("difficulty"), provenance: one("provenance"), limit: 50, offset: page * 50 };
-  const { rows, total } = await listQuestions(filter);
+  const filter = { q: one("q"), status: one("status"), category: one("category"), difficulty: one("difficulty"), provenance: one("provenance"), batch: one("batch"), limit: 50, offset: page * 50 };
+  const [{ rows, total }, jobs] = await Promise.all([listQuestions(filter), listJobs(60)]);
   const sel = "rounded-lg border border-line bg-white px-2 py-1.5";
   const qs = (p: number) => new URLSearchParams(Object.entries({ ...filter, page: String(p), limit: undefined, offset: undefined }).filter(([, v]) => v !== undefined) as [string, string][]).toString();
 
@@ -40,6 +42,14 @@ export default async function QuestionsPage(props: PageProps<"/admin/questions">
           <option value="">Any origin</option>
           {["ai", "manual", "demo"].map((s) => <option key={s}>{s}</option>)}
         </select>
+        <select name="batch" defaultValue={filter.batch ?? ""} className={sel} aria-label="Batch">
+          <option value="">Any batch</option>
+          {jobs.map((j) => (
+            <option key={j.id} value={j.id}>
+              {batchId(j.id)} · {formatGameTime(j.created_at)} · {j.target_count} asked{j.trigger === "auto" ? " · auto" : ""}
+            </option>
+          ))}
+        </select>
         <button className="btn-soft min-h-9 px-3 py-1 text-sm">Filter</button>
       </form>
 
@@ -47,7 +57,7 @@ export default async function QuestionsPage(props: PageProps<"/admin/questions">
         <div className="overflow-x-auto rounded-2xl border border-line bg-card">
           <table className="w-full text-sm">
             <thead className="bg-paper text-left text-ink-soft">
-              <tr><th className="p-2"><SelectAll /></th><th className="p-2">Prompt</th><th className="p-2">Answer</th><th className="p-2">Category</th><th className="p-2">Status</th><th className="p-2">Verification</th><th className="p-2">Origin</th><th className="p-2">Used</th></tr>
+              <tr><th className="p-2"><SelectAll /></th><th className="p-2">Prompt</th><th className="p-2">Answer</th><th className="p-2">Category</th><th className="p-2">Status</th><th className="p-2">Verification</th><th className="p-2">Origin / batch</th><th className="p-2">Used</th></tr>
             </thead>
             <tbody>
               {rows.map((q) => (
@@ -58,7 +68,17 @@ export default async function QuestionsPage(props: PageProps<"/admin/questions">
                   <td className="p-2">{q.category}<br /><span className="text-ink-soft">{q.difficulty}</span></td>
                   <td className="p-2"><Badge>{q.status}</Badge></td>
                   <td className="p-2"><Badge>{q.verification_status}</Badge></td>
-                  <td className="p-2">{q.is_demo ? <Badge tone="demo">demo</Badge> : q.provenance}</td>
+                  <td className="p-2 whitespace-nowrap">
+                    {q.is_demo ? <Badge tone="demo">demo</Badge> : q.provenance}
+                    {q.generation_job_id && (
+                      <>
+                        <br />
+                        <Link className="font-mono text-xs underline" href={`?batch=${q.generation_job_id}`} title="Show only this batch">{batchId(q.generation_job_id)}</Link>
+                      </>
+                    )}
+                    <br />
+                    <span className="text-xs text-ink-soft">{formatGameTime(q.created_at)}</span>
+                  </td>
                   <td className="p-2 whitespace-nowrap text-ink-soft">{q.used_on ?? "—"}</td>
                 </tr>
               ))}

@@ -30,6 +30,10 @@ What makes a great question:
   Never include another number in the prompt that players could mistake for the answer or type back in.
 - Exactly one reasonable interpretation: state the geography, time period, product size/edition or
   measurement basis when it matters. Never use "average" or "typical" without defining the population and period.
+- Players only see the prompt — never the reference period. If the answer is about one specific record, season,
+  game, year, edition, model or version, the prompt itself must name it; never say "in a season" or "in a game"
+  when the answer is one particular record-setting one. Any year, edition or measuring point in the prompt (to the
+  roof vs. to the tip, US launch vs. first launch anywhere) must match the evidence exactly.
 - Don't hinge on a precise official figure ("per the 2020 survey"): prefer facts where close is clearly good enough.
 - Stable facts that won't change soon. Avoid "currently"/"this year" unless a reference period is given.
 - Rounding appropriate to the evidence; no artificial precision for uncertain estimates.
@@ -119,7 +123,11 @@ Research rules (keep it economical):
   the arithmetic yourself. If every component is confirmed and the math is right, the verdict is "supported":
   set value_in_source to the computed result, quote the key component in "excerpt", and list every component
   value and its source in "notes". Only use "unclear" if a component can't be confirmed.
-- Check that the question wording, unit and reference period match the evidence exactly. If the number in the best source
+- Check that the question wording, unit and reference period match the evidence exactly.
+- Read the prompt as a player would, WITHOUT the reference period (players never see it). Set matches_wording false
+  if the prompt could reasonably mean a different instance than the answer (a typical season vs. the record season),
+  or if a year, edition, place or measuring point in the prompt differs from the evidence (a 1979 launch that was really
+  in 1980; "to the tip" when the number is the roof height). Explain the mismatch in ambiguity_notes. If the number in the best source
   differs from the proposed answer (beyond trivial rounding), use verdict "contradicted" and report the source's value.
 - Judge ambiguity honestly: could two reasonable players interpret the prompt differently and get different answers?
 - Judge whether the topic is family friendly.

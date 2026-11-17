@@ -4,6 +4,7 @@ import { candidateAction, jobControlAction } from "@/app/admin/actions";
 import { JobPoller } from "@/components/admin/JobPoller";
 import { Badge, Panel } from "@/components/admin/ui";
 import { getJob } from "@/lib/server/ai/pipeline";
+import { batchId, formatGameTime } from "@/lib/time";
 
 export default async function JobPage(props: PageProps<"/admin/jobs/[id]">) {
   const { id } = await props.params;
@@ -16,7 +17,9 @@ export default async function JobPage(props: PageProps<"/admin/jobs/[id]">) {
     <div className="space-y-5">
       <Link href="/admin/generate" className="text-sm underline">‹ Generate</Link>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-2xl font-extrabold">Generation job</h1>
+        <h1 className="font-display text-2xl font-extrabold">Batch <span className="font-mono">{batchId(job.id)}</span></h1>
+        <span className="text-sm text-ink-soft">created {formatGameTime(job.created_at)} ET</span>
+        <Link className="text-sm underline" href={`/admin/questions?batch=${job.id}`}>See this batch&apos;s questions ›</Link>
         <Badge>{job.status}</Badge>
         {active && <JobPoller jobId={job.id} />}
       </div>

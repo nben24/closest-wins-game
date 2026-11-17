@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { batchId, formatGameTime } from "@/lib/time";
 import { notFound } from "next/navigation";
 import { approveAction, sourceCheckAction, statusAction } from "@/app/admin/actions";
 import { ActionForm } from "@/components/admin/ActionForm";
@@ -30,6 +31,15 @@ export default async function QuestionPage(props: PageProps<"/admin/questions/[i
         <Badge>{q.status}</Badge>
         <Badge>{q.verification_status}</Badge>
         {q.is_demo ? <Badge tone="demo">demo · not verified</Badge> : <Badge tone="draft">{q.provenance}</Badge>}
+        <span className="text-sm text-ink-soft">
+          created {formatGameTime(q.created_at)} ET
+          {q.generation_job_id && (
+            <>
+              {" · "}batch{" "}
+              <Link className="font-mono underline" href={`/admin/questions?batch=${q.generation_job_id}`}>{batchId(q.generation_job_id)}</Link>
+            </>
+          )}
+        </span>
         {sp.saved && <span className="text-sm font-semibold text-mint">Saved.</span>}
       </div>
       {live && (

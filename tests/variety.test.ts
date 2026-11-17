@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db";
+import { wordingChecks } from "@/lib/content-checks";
+import { relaxedBlockers } from "@/lib/server/ai/pipeline";
+import type { Proposal, Research } from "@/lib/server/ai/schemas";
 import { classifyQuestion, crowdedTypes, GENERATABLE_TYPES, perJobTypeCap, planTypes, type QuestionType } from "@/lib/question-types";
 import { pickDailySet, type PoolQuestion } from "@/lib/scheduler";
 import { rebuildUpcoming } from "@/lib/server/admin/ops";
@@ -144,5 +147,46 @@ describe("rebuild upcoming days", () => {
     );
     await expect(rebuildUpcoming("admin")).rejects.toMatchObject({ code: "short" });
     expect(await db.query("select id from daily_challenges order by challenge_date")).toEqual(before);
+  });
+});
+
+describe("wording traps", () => {
+  const base = { answer: 73, scoringType: "ratio" as const, unit: "home runs", category: "sports", questionType: "record" };
+  const codes = (q: Parameters<typeof wordingChecks>[0]) => wordingChecks(q).map((c) => c.code);
+
+  it("flags 'in a season' when the answer is one specific season", () => {
+    const bonds = { ...base, prompt: "How many home runs did Barry Bonds hit in a single MLB season?", referencePeriod: "2001 MLB season", sourceExcerpt: "He completed the 2001 season with 73 home runs." };
+    expect(codes(bonds)).toEqual(["unnamed_instance"]);
+    expect(codes({ ...bonds, prompt: "How many home runs did Barry Bonds hit in his record-setting 2001 MLB season?" })).toEqual([]);
+    expect(codes({ ...bonds, prompt: "On average, how many steps does a US adult take in one day?", referencePeriod: "NHANES 2005-2006" })).toEqual([]);
+    expect(codes({ ...bonds, prompt: "How many points did Wilt Chamberlain score in his famous record-setting single NBA game?", referencePeriod: "March 2, 1962" })).toEqual([]);
+  });
+
+  it("flags a source quote whose numbers don't include the answer", () => {
+    const ticket = { prompt: "What was the average price of a movie theater ticket in the US in 1980, in dollars?", answer: 2.89, scoringType: "ratio" as const, unit: "dollars", category: "entertainment", questionType: "then_vs_now", referencePeriod: "1980", sourceExcerpt: "1979 | $2.47 1980 | $2.69 1981 | $2.78" };
+    expect(codes(ticket)).toEqual(["excerpt_number"]);
+    expect(codes({ ...ticket, answer: 2.69 })).toEqual([]);
+    expect(codes({ ...ticket, sourceExcerpt: "Tickets cost 2,722 cents", answer: 2722 })).toEqual([]);
+    expect(codes({ ...ticket, questionType: "runtime", sourceExcerpt: "Tech specs: Runtime 2 hours 4 minutes · Color", answer: 124 })).toEqual([]);
+  });
+
+  it("doesn't expect computed answers to appear in the quote", () => {
+    const gap = { prompt: "How many years passed between the opening of the Brooklyn Bridge and the opening of the Golden Gate Bridge?", answer: 54, scoringType: "ratio" as const, unit: "years", category: "geography", questionType: "years_between", referencePeriod: "1883 to 1937", sourceExcerpt: "The Brooklyn Bridge opened on May 24, 1883." };
+    expect(codes(gap)).toEqual([]);
+  });
+
+  it("blocks relaxed auto-approval for these traps", () => {
+    const p = {
+      prompt: "How many home runs did Barry Bonds hit in a single MLB season?", answer: 73, unit: "home runs", category: "sports", difficulty: "hard",
+      scoring_type: "ratio", question_type: "record", tolerance: 1.8, allow_decimal: false, allow_negative: false, explanation: "x", subject: "bonds hr",
+      reference_period: "2001 MLB season", why_estimable: "x", suggested_source_url: null,
+    } as Proposal;
+    const r = {
+      verdict: "supported", source_url: "https://www.britannica.com/biography/Barry-Bonds", source_title: "Barry Bonds", source_type: "secondary",
+      excerpt: "He completed the 2001 season with 73 home runs.", value_in_source: 73, unit_in_source: "home runs", reference_period: "2001 MLB season",
+      matches_wording: true, ambiguity_notes: "", is_ambiguous: false, family_friendly: true, suggested_difficulty: "hard", conflicting_sources: false, notes: "",
+    } as Research;
+    expect(relaxedBlockers(p, r).join(" ")).toMatch(/one specific season/);
+    expect(relaxedBlockers({ ...p, prompt: "How many home runs did Barry Bonds hit in his record-setting 2001 MLB season?" }, r)).toEqual([]);
   });
 });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { batchId, formatGameTime } from "@/lib/time";
 import { createJobAction } from "@/app/admin/actions";
 import { ActionForm } from "@/components/admin/ActionForm";
 import { Badge, inputCls, Panel } from "@/components/admin/ui";
@@ -70,11 +71,12 @@ export default async function GeneratePage() {
       </p>
       <Panel title="Jobs">
         <table className="w-full text-sm">
-          <thead className="text-left text-ink-soft"><tr><th className="py-1">Created</th><th>Status</th><th>Target</th><th>Accepted</th><th>Held</th><th>Rejected</th><th>Calls</th><th>Est. cost</th><th></th></tr></thead>
+          <thead className="text-left text-ink-soft"><tr><th className="py-1">Created (ET)</th><th>Batch</th><th>Status</th><th>Target</th><th>Accepted</th><th>Held</th><th>Rejected</th><th>Calls</th><th>Est. cost</th><th></th></tr></thead>
           <tbody>
             {jobs.map((j) => (
               <tr key={j.id} className="border-t border-line">
-                <td className="py-1.5">{j.created_at.toISOString().slice(0, 16).replace("T", " ")} {j.trigger === "auto" && <Badge tone="draft">auto</Badge>}</td>
+                <td className="py-1.5">{formatGameTime(j.created_at)} {j.trigger === "auto" && <Badge tone="draft">auto</Badge>}</td>
+                <td><Link className="font-mono text-xs underline" href={`/admin/questions?batch=${j.id}`} title="See this batch's questions">{batchId(j.id)}</Link></td>
                 <td><Badge>{j.status}</Badge></td>
                 <td className="tabular-nums">{j.target_count}</td>
                 <td className="tabular-nums">{j.accepted_count}</td>
@@ -85,7 +87,7 @@ export default async function GeneratePage() {
                 <td><Link className="underline" href={`/admin/jobs/${j.id}`}>Open</Link></td>
               </tr>
             ))}
-            {jobs.length === 0 && <tr><td colSpan={9} className="py-4 text-center text-ink-soft">No jobs yet.</td></tr>}
+            {jobs.length === 0 && <tr><td colSpan={10} className="py-4 text-center text-ink-soft">No jobs yet.</td></tr>}
           </tbody>
         </table>
       </Panel>

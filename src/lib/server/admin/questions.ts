@@ -64,6 +64,8 @@ export interface QuestionFilter {
   category?: string;
   difficulty?: string;
   provenance?: string;
+  /** A generation job (batch) id. */
+  batch?: string;
   limit?: number;
   offset?: number;
 }
@@ -85,6 +87,7 @@ export async function listQuestions(f: QuestionFilter): Promise<{ rows: (Questio
   if (f.category) add("q.category = $?", f.category);
   if (f.difficulty) add("q.difficulty = $?", f.difficulty);
   if (f.provenance) add("q.provenance = $?", f.provenance);
+  if (f.batch && /^[0-9a-f-]{36}$/i.test(f.batch)) add("q.generation_job_id = $?::uuid", f.batch);
   const w = where.length ? `where ${where.join(" and ")}` : "";
   const total = (await db.one<{ n: number }>(`select count(*)::int as n from questions q ${w}`, vals))!.n;
   vals.push(Math.min(f.limit ?? 50, 200), f.offset ?? 0);

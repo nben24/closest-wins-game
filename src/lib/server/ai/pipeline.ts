@@ -1,7 +1,7 @@
 import "server-only";
 import crypto from "node:crypto";
 import { getDb, type Sql } from "@/lib/db";
-import { runContentChecks, type CheckResult, type QuestionDraft } from "@/lib/content-checks";
+import { runContentChecks, wordingChecks, type CheckResult, type QuestionDraft } from "@/lib/content-checks";
 import { mostSimilar, NEAR_DUPLICATE_THRESHOLD, normalizePrompt, normalizeSubject } from "@/lib/similarity";
 import { getSettings, type AppSettings } from "@/lib/server/admin/settings";
 import { AiError, getAiProvider, type AiProvider, type CallUsage } from "@/lib/server/ai/provider";
@@ -380,6 +380,7 @@ function proposalToDraft(p: Proposal, r?: Research | null): QuestionDraft {
     sourceTitle: r?.source_title ?? null,
     sourceExcerpt: r?.excerpt ?? null,
     referencePeriod: r?.reference_period ?? p.reference_period,
+    questionType: p.question_type ?? null,
   };
 }
 
@@ -445,6 +446,7 @@ export function relaxedBlockers(p: Proposal, research: Research): string[] {
   if (!research.family_friendly) out.push("not family friendly");
   if (!valuesMatch(p.answer, research.value_in_source)) out.push("the source's number doesn't match the answer");
   if (!research.source_url || !research.source_title || !research.excerpt) out.push("no source link, title and quote were recorded");
+  for (const w of wordingChecks(proposalToDraft(p, research))) out.push(w.message);
   return out;
 }
 
