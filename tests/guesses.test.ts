@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db";
-import { closestGuesses, missNote, wildestGuess, type PlayerGuess } from "@/lib/guess-summary";
+import { closestGuesses, isReallyOff, missNote, wildestGuess, wildestGuesses, type PlayerGuess } from "@/lib/guess-summary";
 import { dayGuesses } from "@/lib/server/guesses";
 import { beginRound, getPlayState, submitRound } from "@/lib/server/play";
 import { fakeClock, freshDb, makePlayer, resetClock } from "./support/db";
@@ -127,6 +127,28 @@ describe("closest / wildest / miss notes", () => {
 
   it("treats a zero guess on a ratio question as the furthest off", () => {
     expect(wildestGuess("ratio", 480, [g("a", 0), g("b", 37), g("c", 500)])!.playerId).toBe("a");
+  });
+
+  it("reports ties for wildest", () => {
+    // year question: 1915 and 2063 are both 74 years off
+    expect(wildestGuesses("year", 1989, [g("a", 1915), g("b", 1990), g("c", 2063)]).map((x) => x.playerId)).toEqual(["a", "c"]);
+    // count question: 1,000 and 4,000 are both 2× off an answer of 2,000
+    expect(wildestGuesses("ratio", 2000, [g("a", 1000), g("b", 2100), g("c", 4000)]).map((x) => x.playerId)).toEqual(["a", "c"]);
+  });
+
+  it("only treats genuinely big misses as wild", () => {
+    // strict count question (half points at 30% off): 58% off scores low but isn't 3× off
+    expect(isReallyOff({ type: "ratio", tolerance: 1.3 }, 100, 158)).toBe(false);
+    expect(isReallyOff({ type: "ratio", tolerance: 1.3 }, 100, 300)).toBe(true);
+    expect(isReallyOff({ type: "ratio", tolerance: 1.3 }, 100, 33)).toBe(true);
+    // loose count question (half points at 2× off): 3× off still scores too well to be wild
+    expect(isReallyOff({ type: "ratio", tolerance: 2 }, 100, 300)).toBe(false);
+    expect(isReallyOff({ type: "ratio", tolerance: 2 }, 100, 1000)).toBe(true);
+    // year question with half points at 10 years off: needs 30+ years
+    expect(isReallyOff({ type: "year", tolerance: 10 }, 1989, 1969)).toBe(false);
+    expect(isReallyOff({ type: "year", tolerance: 10 }, 1989, 1950)).toBe(true);
+    // a 0 on a count question is always wild
+    expect(isReallyOff({ type: "ratio", tolerance: 2 }, 100, 0)).toBe(true);
   });
 
   it("describes misses in plain words", () => {

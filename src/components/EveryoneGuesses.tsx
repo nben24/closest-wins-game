@@ -142,7 +142,8 @@ function QuestionView({ q }: { q: QuestionGuesses }) {
               icon="🤯"
               title="Wildest guess"
               people={[q.wildest]}
-              more={0}
+              more={q.wildestOthers}
+              moreText={`+ ${q.wildestOthers} other${q.wildestOthers === 1 ? "" : "s"} just as far off`}
               value={show(q, q.wildest.guess)}
               note={missNote(q.scoringType, q.answer, q.wildest.guess)}
             />
@@ -166,8 +167,8 @@ function QuestionView({ q }: { q: QuestionGuesses }) {
   );
 }
 
-function HighlightCard({ tone, icon, title, people, more, value, note }: {
-  tone: "hit" | "coral"; icon: string; title: string; people: Highlight[]; more: number; value: string; note: string;
+function HighlightCard({ tone, icon, title, people, more, moreText, value, note }: {
+  tone: "hit" | "coral"; icon: string; title: string; people: Highlight[]; more: number; moreText?: string; value: string; note: string;
 }) {
   return (
     <div className={`rounded-2xl p-3 ${tone === "hit" ? "bg-hit-soft" : "bg-coral-soft"}`}>
@@ -183,7 +184,7 @@ function HighlightCard({ tone, icon, title, people, more, value, note }: {
             <span className="truncate">{p.isViewer ? `${p.name} (you)` : p.name}</span>
           </li>
         ))}
-        {more > 0 && <li className="text-sm text-ink-soft">+ {more} more</li>}
+        {more > 0 && <li className="text-sm text-ink-soft">{moreText ?? `+ ${more} more`}</li>}
       </ul>
     </div>
   );

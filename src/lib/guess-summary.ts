@@ -1,5 +1,5 @@
 import { formatNumber } from "@/lib/format";
-import { errorDistance, type ScoringType } from "@/lib/scoring";
+import { errorDistance, halfPointDistance, scoreGuess, type ScoringType } from "@/lib/scoring";
 
 /**
  * Highlights for the "everyone's guesses" view: who was closest and whose
@@ -8,8 +8,12 @@ import { errorDistance, type ScoringType } from "@/lib/scoring";
 
 /** "Half points or better". */
 export const HALF_POINTS = 500;
-/** A wildest guess is only called out if it scored below this (i.e. really off). */
+/** A wildest guess is only called out if it scored below this... */
 export const WILD_MAX_SCORE = 200;
+/** ...and, on count/amount questions, was at least this many times off... */
+export const WILD_MIN_FACTOR = 3;
+/** ...or, on year/percent/other questions, at least this many half-point distances off. */
+export const WILD_MIN_HALF_DISTANCES = 3;
 
 export interface PlayerGuess {
   playerId: string;
@@ -39,15 +43,35 @@ export function closestGuesses(type: ScoringType, answer: number, guesses: Playe
 }
 
 /**
- * The single furthest-off guess, or null when there are fewer than 3 answers
- * or the furthest guess is also the closest (everyone guessed the same).
+ * Everyone tied for the furthest-off guess, or [] when there are fewer than
+ * 3 answers or the furthest guess is also the closest (everyone agreed).
  */
-export function wildestGuess(type: ScoringType, answer: number, guesses: PlayerGuess[]): PlayerGuess | null {
+export function wildestGuesses(type: ScoringType, answer: number, guesses: PlayerGuess[]): PlayerGuess[] {
   const a = answered(guesses);
-  if (a.length < 3) return null;
-  const worst = a.reduce((w, g) => (miss(type, answer, g.guess) > miss(type, answer, w.guess) ? g : w));
+  if (a.length < 3) return [];
+  const worst = Math.max(...a.map((g) => miss(type, answer, g.guess)));
   const best = Math.min(...a.map((g) => miss(type, answer, g.guess)));
-  return miss(type, answer, worst.guess) - best > 1e-12 ? worst : null;
+  if (!(worst - best > 1e-12)) return [];
+  return a.filter((g) => miss(type, answer, g.guess) === worst || Math.abs(miss(type, answer, g.guess) - worst) <= 1e-12);
+}
+
+/** The single furthest-off guess (first of any tie), or null. */
+export function wildestGuess(type: ScoringType, answer: number, guesses: PlayerGuess[]): PlayerGuess | null {
+  return wildestGuesses(type, answer, guesses)[0] ?? null;
+}
+
+/**
+ * Is this guess off by enough to name someone "wildest"? It must score under
+ * WILD_MAX_SCORE AND be a genuinely big miss: 3× off on count/amount
+ * questions, or 3 half-point distances off on year/percent/other questions.
+ * Without the second rule, a strict question would call a 58%-off guess wild.
+ */
+export function isReallyOff(config: { type: ScoringType; tolerance: number }, answer: number, guess: number): boolean {
+  if (scoreGuess(config, answer, guess) >= WILD_MAX_SCORE) return false;
+  const d = miss(config.type, answer, guess);
+  if (config.type === "ratio") return d >= Math.log(WILD_MIN_FACTOR) - 1e-12;
+  const half = halfPointDistance(config);
+  return half !== null && d >= WILD_MIN_HALF_DISTANCES * half - 1e-12;
 }
 
 /** "13× too low", "74 years early", "6 points high", "exact". */

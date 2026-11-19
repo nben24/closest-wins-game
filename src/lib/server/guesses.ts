@@ -1,8 +1,8 @@
 import "server-only";
 import { getDb } from "@/lib/db";
 import { formatNickname } from "@/lib/names";
-import { closestGuesses, HALF_POINTS, WILD_MAX_SCORE, wildestGuess, type PlayerGuess } from "@/lib/guess-summary";
-import { scoreGuess, type ScoringType } from "@/lib/scoring";
+import { closestGuesses, HALF_POINTS, isReallyOff, wildestGuesses, type PlayerGuess } from "@/lib/guess-summary";
+import type { ScoringType } from "@/lib/scoring";
 
 /**
  * Everyone's guesses for one day: the spread of guesses as ANONYMOUS dots,
@@ -48,7 +48,10 @@ export interface QuestionGuesses {
   /** Everyone tied for closest (at most 3 named; see closestCount). */
   closest: Highlight[];
   closestCount: number;
+  /** The furthest-off guess, only when it's a genuinely big miss (see isReallyOff). */
   wildest: Highlight | null;
+  /** Others exactly as far off as `wildest` (shown as "+ N other"). */
+  wildestOthers: number;
   mine: { guess: number | null; score: number } | null;
 }
 
@@ -125,8 +128,9 @@ export async function dayGuesses(viewerId: string, date: string): Promise<DayGue
     const closestAll = s.voided ? [] : closestGuesses(type, answer, all);
     // Sort ties so the viewer is named first if they're among them.
     closestAll.sort((a, b) => Number(b.isViewer) - Number(a.isViewer) || a.name.localeCompare(b.name));
-    const wild = s.voided ? null : wildestGuess(type, answer, all);
-    const wildIsReallyOff = wild !== null && scoreGuess({ type, tolerance }, answer, wild.guess) < WILD_MAX_SCORE;
+    const wildAll = s.voided ? [] : wildestGuesses(type, answer, all);
+    wildAll.sort((a, b) => Number(b.isViewer) - Number(a.isViewer) || a.name.localeCompare(b.name));
+    const wild = wildAll.length && isReallyOff({ type, tolerance }, answer, wildAll[0].guess!) ? wildAll : [];
     const me = all.find((g) => g.isViewer);
     return {
       position: s.position,
@@ -145,7 +149,8 @@ export async function dayGuesses(viewerId: string, date: string): Promise<DayGue
       tooHigh: answered.filter((g) => g.guess > answer).length,
       closest: closestAll.slice(0, 3).map(highlight),
       closestCount: closestAll.length,
-      wildest: wildIsReallyOff ? highlight(wild!) : null,
+      wildest: wild.length ? highlight(wild[0]) : null,
+      wildestOthers: Math.max(0, wild.length - 1),
       mine: me ? { guess: me.guess, score: me.score } : null,
     };
   });
