@@ -2,7 +2,7 @@ import "server-only";
 import { cleanPlayerPeriod } from "@/lib/format";
 import { QUESTIONS_PER_DAY, TIMING } from "@/config/game";
 import { getDb, isUniqueViolation, type Sql } from "@/lib/db";
-import { guessMax, parseGuess, scoreGuess, type ScoringType } from "@/lib/scoring";
+import { parseGuess, scoreGuess, type ScoringType } from "@/lib/scoring";
 import { getPlayableChallenge, today, type ChallengeRow } from "@/lib/server/challenges";
 import { now as serverNow } from "@/lib/server/clock";
 import { ApiError } from "@/lib/server/errors";
@@ -340,7 +340,7 @@ async function submitInChallenge(
       await sql.query("update rounds set status = 'timed_out', score = 0, finalized_at = $2 where id = $1", [round.id, at]);
       await recomputeAttempt(sql, attempt.id, at);
     } else {
-      const parsed = parseGuess(rawGuess, { allowDecimal: snap.allow_decimal, allowNegative: snap.allow_negative, maxValue: guessMax(snap.scoring_type) });
+      const parsed = parseGuess(rawGuess, { allowDecimal: snap.allow_decimal, allowNegative: snap.allow_negative });
       const rawText = typeof rawGuess === "string" || typeof rawGuess === "number" ? String(rawGuess).slice(0, 40) : null;
       if (parsed.ok) {
         const score = scoreGuess({ type: snap.scoring_type, tolerance: snap.tolerance }, snap.answer, parsed.value);

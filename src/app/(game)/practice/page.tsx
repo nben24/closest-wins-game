@@ -6,7 +6,7 @@ import { QuestionCard } from "@/components/QuestionCard";
 import { RevealPanel } from "@/components/RevealPanel";
 import { Shell } from "@/components/Shell";
 import { PRACTICE_QUESTIONS } from "@/lib/demo-questions";
-import { guessMax, parseGuess, scoreGuess } from "@/lib/scoring";
+import { parseGuess, scoreGuess } from "@/lib/scoring";
 
 /**
  * Untimed practice. Runs entirely in the browser with public practice
@@ -19,7 +19,7 @@ export default function PracticePage() {
   const q = PRACTICE_QUESTIONS[index % PRACTICE_QUESTIONS.length];
 
   const submit = () => {
-    const p = parseGuess(value, { ...q, maxValue: guessMax(q.scoringType) });
+    const p = parseGuess(value, q);
     const guess = p.ok ? p.value : null;
     setRevealed({ guess, score: scoreGuess({ type: q.scoringType, tolerance: q.tolerance }, q.answer, guess) });
   };
