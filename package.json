@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:live": "LOCAL_DB_DIR=.data/pglite-live LOCAL_SEED_DEMO=false next dev",
+    "live:import": "tsx scripts/import-live.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

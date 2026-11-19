@@ -77,6 +77,17 @@ export async function ensureLocalIdentity(): Promise<Identity> {
   return { authUserId: id, isAnonymous: true, email: null };
 }
 
+/**
+ * DEV TOOLS ONLY: become an existing local player (used to preview a snapshot
+ * of live data as a given player). Refuses outside local development.
+ */
+export async function setLocalPlayerCookieForDev(authUserId: string): Promise<void> {
+  if (appMode() !== "local" || env.isVercel || process.env.NODE_ENV === "production") throw new Error("not allowed");
+  if (!UUID_RE.test(authUserId)) throw new Error("bad id");
+  const store = await cookies();
+  store.set(LOCAL_COOKIE, `${authUserId}.${sign(authUserId)}`, cookieOpts);
+}
+
 export async function setLocalAdminCookie(): Promise<void> {
   const store = await cookies();
   store.set(LOCAL_ADMIN_COOKIE, `admin.${sign("admin")}`, { ...cookieOpts, maxAge: 60 * 60 * 12 });

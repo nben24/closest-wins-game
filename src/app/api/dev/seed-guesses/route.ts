@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { appMode, env } from "@/lib/env";
 import { AVATARS } from "@/lib/names";
 import { scoreGuess, type ScoringType } from "@/lib/scoring";
 import { getPlayableChallenge, today } from "@/lib/server/challenges";
 import { now } from "@/lib/server/clock";
+import { devToolsAllowed } from "@/lib/server/dev";
 import { route } from "@/lib/server/errors";
 
 /**
@@ -70,7 +70,7 @@ function fakeGuess(
 }
 
 export const GET = route(async () => {
-  if (appMode() !== "local" || env.isVercel || process.env.NODE_ENV === "production") {
+  if (!devToolsAllowed()) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const date = today();
