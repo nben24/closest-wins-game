@@ -6,6 +6,11 @@ import { errorDistance, type ScoringType } from "@/lib/scoring";
  * guess was furthest off. Pure, so it runs the same on server and client.
  */
 
+/** "Half points or better". */
+export const HALF_POINTS = 500;
+/** A wildest guess is only called out if it scored below this (i.e. really off). */
+export const WILD_MAX_SCORE = 200;
+
 export interface PlayerGuess {
   playerId: string;
   name: string;

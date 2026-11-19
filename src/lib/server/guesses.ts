@@ -1,18 +1,32 @@
 import "server-only";
 import { getDb } from "@/lib/db";
 import { formatNickname } from "@/lib/names";
-import type { PlayerGuess } from "@/lib/guess-summary";
-import type { ScoringType } from "@/lib/scoring";
+import { closestGuesses, HALF_POINTS, WILD_MAX_SCORE, wildestGuess, type PlayerGuess } from "@/lib/guess-summary";
+import { scoreGuess, type ScoringType } from "@/lib/scoring";
 
 /**
- * Everyone's guesses for one day, by name.
+ * Everyone's guesses for one day: the spread of guesses as ANONYMOUS dots,
+ * plus a few named highlights (closest and the wildest miss). The full list
+ * of who guessed what is never sent, so it can't be dug out of the browser.
  *
- * Guesses give the answers away (three people guessing exactly 2,722 tells
- * you the answer), so they are only returned to a player who has COMPLETED
- * that day's challenge — by which point they have seen every answer anyway.
+ * Guesses give the answers away, so this only returns data to a player who
+ * has COMPLETED that day's challenge (they've seen every answer by then).
  * Anyone else gets `locked: true` and no questions, answers or guesses.
- * Only completed attempts are included; players still mid-game are left out.
+ * Only completed attempts count; players still mid-game are left out.
  */
+
+export interface GuessDot {
+  guess: number;
+  score: number;
+  isViewer: boolean;
+}
+
+export interface Highlight {
+  name: string;
+  avatarId: string;
+  guess: number;
+  isViewer: boolean;
+}
 
 export interface QuestionGuesses {
   position: number;
@@ -22,17 +36,20 @@ export interface QuestionGuesses {
   tolerance: number;
   answer: number;
   voided: boolean;
-  /** Best score first; no-answers last. */
-  guesses: PlayerGuess[];
-}
-
-export interface StandingRow {
-  playerId: string;
-  name: string;
-  avatarId: string;
-  total: number;
-  rank: number;
-  isViewer: boolean;
+  /** Every submitted guess, no names, sorted by value. */
+  dots: GuessDot[];
+  /** Players who finished, including no-answers. */
+  finished: number;
+  noAnswer: number;
+  halfOrBetter: number;
+  median: number | null;
+  tooLow: number;
+  tooHigh: number;
+  /** Everyone tied for closest (at most 3 named; see closestCount). */
+  closest: Highlight[];
+  closestCount: number;
+  wildest: Highlight | null;
+  mine: { guess: number | null; score: number } | null;
 }
 
 export interface DayGuesses {
@@ -41,8 +58,16 @@ export interface DayGuesses {
   locked: boolean;
   /** Players who finished (shown even when locked). */
   players: number;
-  standings: StandingRow[];
   questions: QuestionGuesses[];
+}
+
+const highlight = (g: PlayerGuess): Highlight => ({ name: g.name, avatarId: g.avatarId, guess: g.guess!, isViewer: g.isViewer });
+
+function medianOf(values: number[]): number | null {
+  if (!values.length) return null;
+  const v = [...values].sort((a, b) => a - b);
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
 
 export async function dayGuesses(viewerId: string, date: string): Promise<DayGuesses> {
@@ -51,35 +76,25 @@ export async function dayGuesses(viewerId: string, date: string): Promise<DayGue
     "select id, number from daily_challenges where challenge_date = $1 and status = 'published'",
     [date],
   );
-  if (!ch) return { date, number: null, locked: true, players: 0, standings: [], questions: [] };
+  if (!ch) return { date, number: null, locked: true, players: 0, questions: [] };
 
   const count = await db.one<{ n: number }>("select count(*)::int as n from attempts where challenge_id = $1 and status = 'completed'", [ch.id]);
   const mine = await db.one<{ status: string }>("select status from attempts where challenge_id = $1 and player_id = $2", [ch.id, viewerId]);
   if (mine?.status !== "completed") {
-    return { date, number: ch.number, locked: true, players: count?.n ?? 0, standings: [], questions: [] };
+    return { date, number: ch.number, locked: true, players: count?.n ?? 0, questions: [] };
   }
 
   const people = await db.query<{
-    player_id: string; total_score: number; rank: number; avatar_id: string; name_adjective: string; name_noun: string; name_suffix: number | null;
+    player_id: string; avatar_id: string; name_adjective: string; name_noun: string; name_suffix: number | null;
   }>(
-    `select a.player_id, a.total_score, rank() over (order by a.total_score desc)::int as rank,
-            p.avatar_id, p.name_adjective, p.name_noun, p.name_suffix
+    `select a.player_id, p.avatar_id, p.name_adjective, p.name_noun, p.name_suffix
        from attempts a join players p on p.id = a.player_id
-      where a.challenge_id = $1 and a.status = 'completed'
-      order by a.total_score desc, p.name_adjective, p.name_noun`,
+      where a.challenge_id = $1 and a.status = 'completed'`,
     [ch.id],
   );
   const who = new Map(
     people.map((p) => [p.player_id, { name: formatNickname(p.name_adjective, p.name_noun, p.name_suffix), avatarId: p.avatar_id }]),
   );
-  const standings: StandingRow[] = people.map((p) => ({
-    playerId: p.player_id,
-    ...who.get(p.player_id)!,
-    total: Number(p.total_score),
-    rank: Number(p.rank),
-    isViewer: p.player_id === viewerId,
-  }));
-
   const snaps = await db.query<{
     position: number; prompt: string; unit: string; scoring_type: ScoringType; tolerance: number; answer: number; voided: boolean;
   }>(
@@ -94,7 +109,10 @@ export async function dayGuesses(viewerId: string, date: string): Promise<DayGue
   );
 
   const questions: QuestionGuesses[] = snaps.map((s) => {
-    const guesses: PlayerGuess[] = rounds
+    const type = s.scoring_type;
+    const answer = Number(s.answer);
+    const tolerance = Number(s.tolerance);
+    const all: PlayerGuess[] = rounds
       .filter((r) => r.position === s.position && who.has(r.player_id))
       .map((r) => ({
         playerId: r.player_id,
@@ -102,19 +120,35 @@ export async function dayGuesses(viewerId: string, date: string): Promise<DayGue
         guess: r.status === "answered" && r.guess !== null ? Number(r.guess) : null,
         score: s.voided ? 0 : Number(r.score ?? 0),
         isViewer: r.player_id === viewerId,
-      }))
-      .sort((a, b) => (a.guess === null ? 1 : 0) - (b.guess === null ? 1 : 0) || b.score - a.score || a.name.localeCompare(b.name));
+      }));
+    const answered = all.filter((g) => g.guess !== null) as (PlayerGuess & { guess: number })[];
+    const closestAll = s.voided ? [] : closestGuesses(type, answer, all);
+    // Sort ties so the viewer is named first if they're among them.
+    closestAll.sort((a, b) => Number(b.isViewer) - Number(a.isViewer) || a.name.localeCompare(b.name));
+    const wild = s.voided ? null : wildestGuess(type, answer, all);
+    const wildIsReallyOff = wild !== null && scoreGuess({ type, tolerance }, answer, wild.guess) < WILD_MAX_SCORE;
+    const me = all.find((g) => g.isViewer);
     return {
       position: s.position,
       prompt: s.prompt,
       unit: s.unit,
-      scoringType: s.scoring_type,
-      tolerance: Number(s.tolerance),
-      answer: Number(s.answer),
+      scoringType: type,
+      tolerance,
+      answer,
       voided: s.voided,
-      guesses,
+      dots: answered.map((g) => ({ guess: g.guess, score: g.score, isViewer: g.isViewer })).sort((a, b) => a.guess - b.guess),
+      finished: all.length,
+      noAnswer: all.length - answered.length,
+      halfOrBetter: s.voided ? 0 : all.filter((g) => g.score >= HALF_POINTS).length,
+      median: medianOf(answered.map((g) => g.guess)),
+      tooLow: answered.filter((g) => g.guess < answer).length,
+      tooHigh: answered.filter((g) => g.guess > answer).length,
+      closest: closestAll.slice(0, 3).map(highlight),
+      closestCount: closestAll.length,
+      wildest: wildIsReallyOff ? highlight(wild!) : null,
+      mine: me ? { guess: me.guess, score: me.score } : null,
     };
   });
 
-  return { date, number: ch.number, locked: false, players: people.length, standings, questions };
+  return { date, number: ch.number, locked: false, players: people.length, questions };
 }

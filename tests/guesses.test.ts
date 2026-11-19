@@ -38,7 +38,6 @@ describe("everyone's guesses", () => {
     expect(early.locked).toBe(true);
     expect(early.players).toBe(1);
     expect(early.questions).toEqual([]);
-    expect(early.standings).toEqual([]);
     expect(JSON.stringify(early)).not.toContain("answer");
     expect((await dayGuesses(c, "2026-11-11")).locked).toBe(true); // never started
 
@@ -47,15 +46,60 @@ describe("everyone's guesses", () => {
     expect(open.locked).toBe(false);
     expect(open.players).toBe(2);
     expect(open.questions).toHaveLength(5);
-    // only finished players appear; the mid-game player does not
-    for (const q of open.questions) {
-      expect(q.guesses.map((g) => g.playerId).sort()).toEqual([a, c].sort());
-    }
+    // only finished players count; the mid-game player does not
+    for (const q of open.questions) expect(q.finished).toBe(2);
     const q2 = open.questions.find((q) => q.position === 2)!;
-    expect(q2.guesses.find((g) => g.playerId === c)!.guess).toBeNull(); // blank answer
-    expect(q2.guesses[q2.guesses.length - 1].playerId).toBe(c); // no-answers sort last
-    expect(open.standings.find((s) => s.isViewer)!.playerId).toBe(c);
-    expect(open.standings.map((s) => s.total)).toEqual([...open.standings.map((s) => s.total)].sort((x, y) => y - x));
+    expect(q2.dots).toHaveLength(1); // c left it blank
+    expect(q2.noAnswer).toBe(1);
+    expect(q2.mine).toEqual({ guess: null, score: 0 });
+    const q1 = open.questions.find((q) => q.position === 1)!;
+    expect(q1.dots.map((d) => d.guess)).toEqual([1, 5]); // sorted by value
+    expect(q1.dots.find((d) => d.isViewer)!.guess).toBe(5);
+    // dots carry no identity, and no player ids are sent at all
+    for (const d of q1.dots) expect(Object.keys(d).sort()).toEqual(["guess", "isViewer", "score"]);
+    const json = JSON.stringify(open);
+    for (const id of [a, b, c]) expect(json).not.toContain(id);
+  });
+
+  it("names only the closest and a really-off wildest guess", async () => {
+    const ps = [await makePlayer(db), await makePlayer(db), await makePlayer(db), await makePlayer(db)];
+    // Answers come from the seeded demo game; read them via a finished player's view.
+    await play(ps[0], ["1", "1", "1", "1", "1"]);
+    const peek = await dayGuesses(ps[0], "2026-11-11");
+    const ans = peek.questions.map((q) => q.answer);
+    await play(ps[1], ans.map(String)); // exact on everything
+    await play(ps[2], ans.map((x) => String(x + 1)));
+    await play(ps[3], ans.map((x) => String(x * 1000 + 1e6))); // way off
+    const v = await dayGuesses(ps[2], "2026-11-11");
+    for (const q of v.questions) {
+      expect(q.closestCount).toBe(1);
+      expect(q.closest[0].guess).toBe(q.answer);
+      expect(Object.keys(q.closest[0])).not.toContain("playerId");
+      expect(q.wildest).not.toBeNull();
+      expect(q.mine!.guess).toBe(q.answer + 1);
+    }
+  });
+
+  it("doesn't call out a wildest guess when nobody was far off", async () => {
+    const ps = [await makePlayer(db), await makePlayer(db), await makePlayer(db), await makePlayer(db)];
+    await getPlayState(ps[0]); // makes sure today's game exists
+    const qs = await db.query<{ answer: number; tolerance: number; scoring_type: string }>(
+      `select q.answer, q.tolerance, q.scoring_type from challenge_questions q
+         join daily_challenges d on d.id = q.challenge_id
+        where d.challenge_date = '2026-11-11' order by q.position`,
+    );
+    const exact = qs.map((q) => String(Number(q.answer)));
+    const slightly = qs.map((q) => String(q.scoring_type === "ratio" ? Math.round(Number(q.answer) * 1.1) : Number(q.answer) + Math.max(1, Math.round(Number(q.tolerance) * 0.5))));
+    await play(ps[0], exact);
+    await play(ps[1], exact);
+    await play(ps[2], exact);
+    await play(ps[3], slightly);
+    const v = await dayGuesses(ps[3], "2026-11-11");
+    for (const q of v.questions) {
+      expect(q.closestCount).toBe(3);
+      expect(q.wildest).toBeNull(); // furthest guess was still a good one
+      expect(q.mine!.score).toBeGreaterThanOrEqual(200);
+    }
   });
 
   it("is locked for a day with no published game", async () => {

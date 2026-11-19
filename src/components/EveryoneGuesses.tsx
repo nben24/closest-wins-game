@@ -5,13 +5,13 @@ import { useEffect, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { api } from "@/lib/client/api";
 import { formatPoints, formatValue } from "@/lib/format";
-import { closestGuesses, missNote, wildestGuess, type PlayerGuess } from "@/lib/guess-summary";
+import { HALF_POINTS, missNote } from "@/lib/guess-summary";
 import { buildNumberLine } from "@/lib/insights";
 import type { ScoringType } from "@/lib/scoring";
-import type { DayGuesses, QuestionGuesses } from "@/lib/server/guesses";
+import type { DayGuesses, Highlight, QuestionGuesses } from "@/lib/server/guesses";
 
 /** Points at which a guess counts as "half points or better". */
-const HALF = 500;
+const HALF = HALF_POINTS;
 
 const show = (q: { scoringType: ScoringType; unit: string }, v: number) => `${formatValue(v, q.scoringType)}${q.unit ? ` ${q.unit}` : ""}`;
 
@@ -23,7 +23,6 @@ export function EveryoneGuesses({ date }: { date: string }) {
   const [data, setData] = useState<DayGuesses | null>(null);
   const [failed, setFailed] = useState(false);
   const [pos, setPos] = useState(1);
-  const [view, setView] = useState<"question" | "table">("question");
 
   useEffect(() => {
     let alive = true;
@@ -74,27 +73,10 @@ export function EveryoneGuesses({ date }: { date: string }) {
 
   return (
     <section id="guesses" className="card p-5" aria-labelledby="guesses-heading">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="guesses-heading" className="font-display text-2xl font-extrabold">Everyone&apos;s guesses</h2>
-        <div className="flex gap-1 rounded-xl bg-paper p-1 ring-2 ring-line" role="group" aria-label="Guesses view">
-          {(["question", "table"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={view === v}
-              onClick={() => setView(v)}
-              className={`min-h-11 rounded-lg px-3 text-sm font-bold ${view === v ? "bg-primary text-primary-fg" : "text-ink-soft"}`}
-            >
-              {v === "question" ? "By question" : "All at once"}
-            </button>
-          ))}
-        </div>
-      </div>
+      <h2 id="guesses-heading" className="font-display text-2xl font-extrabold">Everyone&apos;s guesses</h2>
       <p className="mt-1 text-base text-ink-soft">{data.players} players finished. Players still mid-game aren&apos;t shown.</p>
 
-      {view === "question" ? (
-        <>
-          <div className="mt-3 grid grid-cols-5 gap-2" role="group" aria-label="Choose a question">
+      <div className="mt-3 grid grid-cols-5 gap-2" role="group" aria-label="Choose a question">
             {data.questions.map((x) => (
               <button
                 key={x.position}
@@ -107,23 +89,17 @@ export function EveryoneGuesses({ date }: { date: string }) {
                 Q{x.position}
               </button>
             ))}
-          </div>
-          <QuestionView q={q} />
-        </>
-      ) : (
-        <AllTable data={data} />
-      )}
+      </div>
+      <QuestionView q={q} />
     </section>
   );
 }
 
 function QuestionView({ q }: { q: QuestionGuesses }) {
-  const closest = q.voided ? [] : closestGuesses(q.scoringType, q.answer, q.guesses);
-  const wild = q.voided ? null : wildestGuess(q.scoringType, q.answer, q.guesses);
-  const closestIds = new Set(closest.map((g) => g.playerId));
-  const answered = q.guesses.filter((g) => g.guess !== null);
-  const half = q.guesses.filter((g) => g.score >= HALF).length;
-  const mine = q.guesses.find((g) => g.isViewer);
+  const answered = q.dots.length;
+  const lowPct = answered ? Math.round((q.tooLow / answered) * 100) : 0;
+  const highPct = answered ? Math.round((q.tooHigh / answered) * 100) : 0;
+  const mine = q.mine;
 
   return (
     <div className="mt-4 space-y-3">
@@ -136,81 +112,86 @@ function QuestionView({ q }: { q: QuestionGuesses }) {
         {q.voided && <p className="mt-2 text-base text-ink-soft">This question was removed from scoring.</p>}
       </div>
 
-      {answered.length >= 2 && <GuessStrip q={q} />}
+      {answered >= 2 && <GuessStrip q={q} />}
 
-      {!q.voided && answered.length > 0 && (
-        <div className="flex flex-wrap gap-2 text-sm font-bold">
-          {closest.length > 0 && (
-            <span className="rounded-lg bg-hit-soft px-2 py-1 text-hit">
-              Closest: {show(q, closest[0].guess!)}
-              {closest.length > 1 ? ` (${closest.length} players)` : ` · ${closest[0].isViewer ? "you" : closest[0].name}`}
-            </span>
-          )}
-          {wild && (
-            <span className="rounded-lg bg-coral-soft px-2 py-1 text-coral">
-              Wildest: {show(q, wild.guess!)} · {wild.isViewer ? "you" : wild.name}
-            </span>
-          )}
-          <span className="rounded-lg bg-paper px-2 py-1 text-ink-soft ring-1 ring-line">
-            {half} of {q.guesses.length} got half points or more
-          </span>
-        </div>
-      )}
-      {mine && mine.guess !== null && !q.voided && (
-        <p className="text-base">
-          You guessed <strong>{show(q, mine.guess)}</strong> ({missNote(q.scoringType, q.answer, mine.guess)}) for <strong>{formatPoints(mine.score)}</strong> points.
+      {answered > 0 && (
+        <p className="text-base text-ink-soft">
+          {q.median !== null && <>Middle guess <strong className="text-ink">{show(q, q.median)}</strong> · </>}
+          {lowPct}% too low · {highPct}% too high
+          {!q.voided && <> · {q.halfOrBetter} of {q.finished} got half points or more</>}
+          {q.noAnswer > 0 && <> · {q.noAnswer} didn&apos;t answer</>}
         </p>
       )}
 
-      <ol className="space-y-1.5" aria-label={`Guesses for question ${q.position}`}>
-        {q.guesses.map((g) => (
-          <GuessRow key={g.playerId} q={q} g={g} closest={closestIds.has(g.playerId)} wild={wild?.playerId === g.playerId} />
-        ))}
-      </ol>
+      {!q.voided && (q.closest.length > 0 || q.wildest) && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {q.closest.length > 0 && (
+            <HighlightCard
+              tone="hit"
+              icon="🎯"
+              title={q.closestCount > 1 ? `Closest (${q.closestCount}-way tie)` : "Closest"}
+              people={q.closest}
+              more={q.closestCount - q.closest.length}
+              value={show(q, q.closest[0].guess)}
+              note={missNote(q.scoringType, q.answer, q.closest[0].guess)}
+            />
+          )}
+          {q.wildest && (
+            <HighlightCard
+              tone="coral"
+              icon="🤯"
+              title="Wildest guess"
+              people={[q.wildest]}
+              more={0}
+              value={show(q, q.wildest.guess)}
+              note={missNote(q.scoringType, q.answer, q.wildest.guess)}
+            />
+          )}
+        </div>
+      )}
+
+      {mine && !q.voided && (
+        <p className="rounded-xl bg-sun-soft p-3 text-base">
+          {mine.guess === null ? (
+            <>You didn&apos;t answer this one.</>
+          ) : (
+            <>
+              You guessed <strong>{show(q, mine.guess)}</strong> ({missNote(q.scoringType, q.answer, mine.guess)}) for{" "}
+              <strong>{formatPoints(mine.score)}</strong> points.
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }
 
-function GuessRow({ q, g, closest, wild }: { q: QuestionGuesses; g: PlayerGuess; closest: boolean; wild: boolean }) {
-  const exact = g.guess !== null && missNote(q.scoringType, q.answer, g.guess) === "exact";
+function HighlightCard({ tone, icon, title, people, more, value, note }: {
+  tone: "hit" | "coral"; icon: string; title: string; people: Highlight[]; more: number; value: string; note: string;
+}) {
   return (
-    <li className={`flex items-center gap-3 rounded-xl px-3 py-2 ${g.isViewer ? "bg-sun-soft ring-2 ring-sun" : "bg-paper"}`}>
-      <Avatar id={g.avatarId} size="sm" label="" />
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-bold">{g.name}</span>
-          {g.isViewer && <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-extrabold text-primary-fg">YOU</span>}
-        </span>
-        {!q.voided && g.guess !== null && (exact || closest || wild) && (
-          <span className="mt-0.5 flex flex-wrap gap-1">
-            {exact ? (
-              <span className="rounded-full bg-hit-soft px-2 py-0.5 text-xs font-extrabold text-hit">EXACT</span>
-            ) : closest ? (
-              <span className="rounded-full bg-hit-soft px-2 py-0.5 text-xs font-extrabold text-hit">CLOSEST</span>
-            ) : null}
-            {wild && (
-              <span className="rounded-full bg-coral-soft px-2 py-0.5 text-xs font-extrabold text-coral">
-                WILDEST · {missNote(q.scoringType, q.answer, g.guess)}
-              </span>
-            )}
-          </span>
-        )}
-      </span>
-      <span className="text-right">
-        <span className="block font-display text-lg font-extrabold tabular-nums">{g.guess === null ? "—" : formatValue(g.guess, q.scoringType)}</span>
-        <span className={`block text-xs font-bold ${g.score >= HALF ? "text-hit" : "text-ink-soft"}`}>
-          {g.guess === null ? "no answer" : q.voided ? "not counted" : `${formatPoints(g.score)} pts`}
-        </span>
-      </span>
-    </li>
+    <div className={`rounded-2xl p-3 ${tone === "hit" ? "bg-hit-soft" : "bg-coral-soft"}`}>
+      <p className={`text-sm font-extrabold uppercase ${tone === "hit" ? "text-hit" : "text-coral"}`}>
+        <span aria-hidden="true">{icon} </span>{title}
+      </p>
+      <p className="mt-1 font-display text-2xl font-extrabold tabular-nums">{value}</p>
+      <p className="text-sm font-semibold text-ink-soft">{note === "exact" ? "Exactly right!" : note}</p>
+      <ul className="mt-2 space-y-1">
+        {people.map((p, i) => (
+          <li key={i} className="flex items-center gap-2 font-bold">
+            <Avatar id={p.avatarId} size="sm" label="" />
+            <span className="truncate">{p.isViewer ? `${p.name} (you)` : p.name}</span>
+          </li>
+        ))}
+        {more > 0 && <li className="text-sm text-ink-soft">+ {more} more</li>}
+      </ul>
+    </div>
   );
 }
 
 /** Every finished player's guess as a dot on one line, with the answer marked. */
 function GuessStrip({ q }: { q: QuestionGuesses }) {
-  const points = q.guesses
-    .filter((g): g is PlayerGuess & { guess: number } => g.guess !== null)
-    .map((g) => ({ playerId: g.playerId, name: g.name, avatarId: g.avatarId, guess: g.guess, isViewer: g.isViewer, score: g.score }));
+  const points = q.dots.map((d, i) => ({ playerId: `d${i}`, name: "", avatarId: "", guess: d.guess, isViewer: d.isViewer, score: d.score }));
   const line = buildNumberLine({ type: q.scoringType, tolerance: q.tolerance }, q.answer, points);
   if (!line) return null;
   const score = new Map(points.map((p) => [p.playerId, p.score]));
@@ -242,7 +223,7 @@ function GuessStrip({ q }: { q: QuestionGuesses }) {
           <span
             key={p.playerId}
             aria-hidden="true"
-            title={`${p.isViewer ? "You" : p.name}: ${formatValue(p.guess, q.scoringType)}`}
+            title={`${p.isViewer ? "You: " : ""}${formatValue(p.guess, q.scoringType)}`}
             className={`absolute -translate-x-1/2 rounded-full ${
               p.isViewer ? "h-4 w-4 bg-coral ring-4 ring-coral-soft" : (score.get(p.playerId) ?? 0) >= HALF ? "h-3 w-3 bg-hit" : "h-3 w-3 bg-ink/35"
             }`}
@@ -260,74 +241,5 @@ function GuessStrip({ q }: { q: QuestionGuesses }) {
         {pinned && <span>Way-off guesses sit at the ends</span>}
       </figcaption>
     </figure>
-  );
-}
-
-/** Every player × every question in one scrollable table. */
-function AllTable({ data }: { data: DayGuesses }) {
-  const best = new Map<number, Set<string>>();
-  const wild = new Map<number, string | null>();
-  const cell = new Map<string, PlayerGuess>();
-  for (const q of data.questions) {
-    best.set(q.position, new Set(q.voided ? [] : closestGuesses(q.scoringType, q.answer, q.guesses).map((g) => g.playerId)));
-    wild.set(q.position, q.voided ? null : (wildestGuess(q.scoringType, q.answer, q.guesses)?.playerId ?? null));
-    for (const g of q.guesses) cell.set(`${q.position}:${g.playerId}`, g);
-  }
-  return (
-    <div className="mt-3">
-      <div className="mb-2 flex flex-wrap gap-2 text-xs font-bold">
-        <span className="rounded-full bg-hit-soft px-2 py-0.5 text-hit">Closest</span>
-        <span className="rounded-full bg-coral-soft px-2 py-0.5 text-coral">Wildest</span>
-        <span className="rounded-full bg-sun-soft px-2 py-0.5 text-ink">You</span>
-      </div>
-      <div className="-mx-2 overflow-x-auto px-2 pb-1" tabIndex={0} aria-label="All guesses table (scrolls sideways)">
-        <table className="w-full min-w-[640px] border-separate border-spacing-y-1 text-sm">
-          <thead>
-            <tr>
-              <th scope="col" className="sticky left-0 z-10 bg-card px-2 text-left text-xs font-bold uppercase text-ink-soft">Player</th>
-              {data.questions.map((q) => (
-                <th key={q.position} scope="col" className="px-2 text-right align-bottom">
-                  <span className="block text-xs font-bold uppercase text-ink-soft">Q{q.position}</span>
-                  <span className="mt-0.5 inline-block whitespace-nowrap rounded-md bg-secondary px-1.5 text-xs font-extrabold text-secondary-fg">
-                    {formatValue(q.answer, q.scoringType)}
-                  </span>
-                </th>
-              ))}
-              <th scope="col" className="px-2 text-right align-bottom text-xs font-bold uppercase text-ink-soft">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.standings.map((s) => {
-              const rowBg = s.isViewer ? "bg-sun-soft" : "bg-paper";
-              return (
-                <tr key={s.playerId}>
-                  <th scope="row" className={`sticky left-0 z-10 rounded-l-xl px-2 py-1.5 text-left font-bold whitespace-nowrap ${rowBg}`}>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="w-5 text-right font-display tabular-nums text-ink-soft">{s.rank}</span>
-                      <Avatar id={s.avatarId} size="sm" label="" />
-                      <span className="max-w-[9rem] truncate">{s.name}</span>
-                    </span>
-                  </th>
-                  {data.questions.map((q) => {
-                    const g = cell.get(`${q.position}:${s.playerId}`);
-                    const isBest = best.get(q.position)?.has(s.playerId);
-                    const isWild = wild.get(q.position) === s.playerId;
-                    return (
-                      <td key={q.position} className={`px-2 py-1.5 text-right whitespace-nowrap ${isBest ? "bg-hit-soft" : isWild ? "bg-coral-soft" : rowBg}`}>
-                        <span className="block font-bold tabular-nums">{!g || g.guess === null ? "—" : formatValue(g.guess, q.scoringType)}</span>
-                        <span className={`block text-xs ${g && g.score >= HALF ? "font-bold text-hit" : "text-ink-soft"}`}>
-                          {q.voided ? "not counted" : `${formatPoints(g?.score ?? 0)}`}
-                        </span>
-                      </td>
-                    );
-                  })}
-                  <td className={`rounded-r-xl px-2 py-1.5 text-right font-display text-lg font-extrabold tabular-nums ${rowBg}`}>{formatPoints(s.total)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }
