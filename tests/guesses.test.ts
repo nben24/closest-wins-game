@@ -161,5 +161,7 @@ describe("closest / wildest / miss notes", () => {
     expect(missNote("percent", 40, 46)).toBe("6 points high");
     expect(missNote("absolute", 10, 7.5)).toBe("2.5 too low");
     expect(missNote("ratio", 44, 44)).toBe("exact");
+    expect(missNote("year", 1955, 194)).toBe("1,761 years early");
+    expect(missNote("ratio", 88, 175)).toBe("2× too high");
   });
 });

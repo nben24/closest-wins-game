@@ -72,13 +72,13 @@ export function missNote(type: ScoringType, answer: number, guess: number): stri
   if (Math.abs(d) <= 1e-9 * Math.max(1, Math.abs(answer))) return "exact";
   if (type === "year") {
     const n = Math.round(Math.abs(d));
-    return `${n} year${n === 1 ? "" : "s"} ${d < 0 ? "early" : "late"}`;
+    return `${formatNumber(n)} year${n === 1 ? "" : "s"} ${d < 0 ? "early" : "late"}`;
   }
   if (type === "percent") return `${formatNumber(Math.abs(d), 1)} point${Math.abs(d) === 1 ? "" : "s"} ${d < 0 ? "low" : "high"}`;
   if (type === "ratio" && answer > 0 && guess > 0) {
     const r = guess / answer;
     const f = r >= 1 ? r : 1 / r;
-    if (f >= 2) return `${formatNumber(Math.round(f))}× too ${r >= 1 ? "high" : "low"}`;
+    if (f >= 1.95) return `${formatNumber(Math.round(f))}× too ${r >= 1 ? "high" : "low"}`;
     return `${Math.round((f - 1) * 100)}% too ${r >= 1 ? "high" : "low"}`;
   }
   return `${formatNumber(Math.abs(d), 2)} too ${d < 0 ? "low" : "high"}`;
