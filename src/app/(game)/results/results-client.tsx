@@ -87,6 +87,11 @@ export function ResultsClient() {
               <Link href="/leaderboard" className="font-bold underline underline-offset-2">Leaderboard</Link>
             </p>
           )}
+          {completed && (
+            <p className="mt-2 text-lg">
+              <Link href="/leaderboard#guesses" className="font-bold text-coral underline underline-offset-2">See what everyone guessed ›</Link>
+            </p>
+          )}
           {completed && shareText && <div className="mt-5"><ShareButton text={shareText} /></div>}
         </section>
 

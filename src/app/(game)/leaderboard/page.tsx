@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Avatar } from "@/components/Avatar";
+import { EveryoneGuesses } from "@/components/EveryoneGuesses";
 import { Onboarding } from "@/components/Onboarding";
 import { CenterMessage, Shell, Spinner } from "@/components/Shell";
 import { api } from "@/lib/client/api";
@@ -191,6 +192,7 @@ function Leaderboard() {
           )}
         </section>
       )}
+      {!weekly && board && <EveryoneGuesses date={board.date} />}
       {weekly && <Champions />}
       <p className="text-center text-sm text-ink-soft">
         Only finished games count. Ties share a rank. Weekly rankings add up each player&apos;s best 5 days (Monday–Sunday); avg is the average per day played.
