@@ -102,7 +102,7 @@ function QuestionView({ q }: { q: QuestionGuesses }) {
   const mine = q.mine;
 
   return (
-    <div className="mt-4 space-y-3">
+    <div className="mt-4 space-y-3 [overflow-wrap:anywhere]">
       <div className="rounded-2xl bg-paper p-4">
         <p className="text-base font-semibold">{q.prompt}</p>
         <p className="mt-2 flex items-center gap-2">
@@ -175,7 +175,7 @@ function HighlightCard({ tone, icon, title, people, more, moreText, value, note 
       <p className={`text-sm font-extrabold uppercase ${tone === "hit" ? "text-hit" : "text-coral"}`}>
         <span aria-hidden="true">{icon} </span>{title}
       </p>
-      <p className="mt-1 font-display text-2xl font-extrabold tabular-nums">{value}</p>
+      <p className={`mt-1 font-display font-extrabold tabular-nums break-words [overflow-wrap:anywhere] ${value.length > 16 ? "text-lg" : "text-2xl"}`}>{value}</p>
       <p className="text-sm font-semibold text-ink-soft">{note === "exact" ? "Exactly right!" : note}</p>
       <ul className="mt-2 space-y-1">
         {people.map((p, i) => (

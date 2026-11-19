@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  guessMax,
   parseGuess,
   previewGuesses,
   scoreGuess,
@@ -86,6 +87,12 @@ describe("scoreGuess", () => {
 describe("parseGuess", () => {
   const intOnly = { allowDecimal: false, allowNegative: false };
   const any = { allowDecimal: true, allowNegative: true };
+  it("rejects percentages over 100", () => {
+    const pct = { allowDecimal: true, allowNegative: false, maxValue: guessMax("percent") };
+    expect(parseGuess("100", pct)).toEqual({ ok: true, value: 100 });
+    expect(parseGuess("150000", pct)).toEqual({ ok: false, reason: "too_large" });
+    expect(guessMax("ratio")).toBeUndefined();
+  });
   it("accepts zero and formatted numbers", () => {
     expect(parseGuess("0", intOnly)).toEqual({ ok: true, value: 0 });
     expect(parseGuess("1,234,567", intOnly)).toEqual({ ok: true, value: 1234567 });

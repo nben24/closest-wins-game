@@ -46,6 +46,13 @@ export interface ScoringConfig {
 export interface InputConfig {
   allowDecimal: boolean;
   allowNegative: boolean;
+  /** Largest accepted guess (100 on percent questions; see guessMax). */
+  maxValue?: number;
+}
+
+/** The largest guess a question type accepts: a percentage can't exceed 100. */
+export function guessMax(type: ScoringType): number | undefined {
+  return type === "percent" ? 100 : undefined;
 }
 
 /** Curve steepness. Larger = flatter near the answer and steeper further out. */
@@ -200,6 +207,7 @@ export function parseGuess(raw: unknown, input: InputConfig): GuessParse {
   const value = Number(s);
   if (!Number.isFinite(value)) return { ok: false, reason: "invalid" };
   if (Math.abs(value) > MAX_GUESS_ABS) return { ok: false, reason: "too_large" };
+  if (input.maxValue !== undefined && value > input.maxValue) return { ok: false, reason: "too_large" };
   return { ok: true, value: Object.is(value, -0) ? 0 : value };
 }
 

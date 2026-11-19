@@ -136,17 +136,18 @@ describe("closest / wildest / miss notes", () => {
     expect(wildestGuesses("ratio", 2000, [g("a", 1000), g("b", 2100), g("c", 4000)]).map((x) => x.playerId)).toEqual(["a", "c"]);
   });
 
-  it("only treats genuinely big misses as wild", () => {
-    // strict count question (half points at 30% off): 58% off scores low but isn't 3× off
+  it("only treats guesses that earned almost nothing as wild", () => {
+    // strict count question (half points at 30% off): 58% off isn't wild, 2.5× off is
     expect(isReallyOff({ type: "ratio", tolerance: 1.3 }, 100, 158)).toBe(false);
-    expect(isReallyOff({ type: "ratio", tolerance: 1.3 }, 100, 300)).toBe(true);
-    expect(isReallyOff({ type: "ratio", tolerance: 1.3 }, 100, 33)).toBe(true);
-    // loose count question (half points at 2× off): 3× off still scores too well to be wild
+    expect(isReallyOff({ type: "ratio", tolerance: 1.3 }, 100, 250)).toBe(true);
+    // live examples from 2026-11-14 that the old 3× floor wrongly skipped
+    expect(isReallyOff({ type: "ratio", tolerance: 1.25 }, 88, 175)).toBe(true);
+    // loose count question (half points at 2× off): 3× off still earned decent points
     expect(isReallyOff({ type: "ratio", tolerance: 2 }, 100, 300)).toBe(false);
     expect(isReallyOff({ type: "ratio", tolerance: 2 }, 100, 1000)).toBe(true);
-    // year question with half points at 10 years off: needs 30+ years
+    // year question with half points at 10 years: 20 years off isn't wild, 40 is
     expect(isReallyOff({ type: "year", tolerance: 10 }, 1989, 1969)).toBe(false);
-    expect(isReallyOff({ type: "year", tolerance: 10 }, 1989, 1950)).toBe(true);
+    expect(isReallyOff({ type: "year", tolerance: 10 }, 1989, 1949)).toBe(true);
     // a 0 on a count question is always wild
     expect(isReallyOff({ type: "ratio", tolerance: 2 }, 100, 0)).toBe(true);
   });

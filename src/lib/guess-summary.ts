@@ -1,5 +1,5 @@
 import { formatNumber } from "@/lib/format";
-import { errorDistance, halfPointDistance, scoreGuess, type ScoringType } from "@/lib/scoring";
+import { errorDistance, scoreGuess, type ScoringType } from "@/lib/scoring";
 
 /**
  * Highlights for the "everyone's guesses" view: who was closest and whose
@@ -8,12 +8,13 @@ import { errorDistance, halfPointDistance, scoreGuess, type ScoringType } from "
 
 /** "Half points or better". */
 export const HALF_POINTS = 500;
-/** A wildest guess is only called out if it scored below this... */
-export const WILD_MAX_SCORE = 200;
-/** ...and, on count/amount questions, was at least this many times off... */
-export const WILD_MIN_FACTOR = 3;
-/** ...or, on year/percent/other questions, at least this many half-point distances off. */
-export const WILD_MIN_HALF_DISTANCES = 3;
+/**
+ * A wildest guess is only called out if it earned almost nothing: under this
+ * many points. That scales with each question's own scoring, so on a strict
+ * question you still need to be about 2× (or ~13 years) off to be named.
+ * Checked against the live data to 2026-11-18: 40 of 40 questions qualified.
+ */
+export const WILD_MAX_SCORE = 50;
 
 export interface PlayerGuess {
   playerId: string;
@@ -60,18 +61,9 @@ export function wildestGuess(type: ScoringType, answer: number, guesses: PlayerG
   return wildestGuesses(type, answer, guesses)[0] ?? null;
 }
 
-/**
- * Is this guess off by enough to name someone "wildest"? It must score under
- * WILD_MAX_SCORE AND be a genuinely big miss: 3× off on count/amount
- * questions, or 3 half-point distances off on year/percent/other questions.
- * Without the second rule, a strict question would call a 58%-off guess wild.
- */
+/** Is this guess off by enough to name someone "wildest"? (It earned almost nothing.) */
 export function isReallyOff(config: { type: ScoringType; tolerance: number }, answer: number, guess: number): boolean {
-  if (scoreGuess(config, answer, guess) >= WILD_MAX_SCORE) return false;
-  const d = miss(config.type, answer, guess);
-  if (config.type === "ratio") return d >= Math.log(WILD_MIN_FACTOR) - 1e-12;
-  const half = halfPointDistance(config);
-  return half !== null && d >= WILD_MIN_HALF_DISTANCES * half - 1e-12;
+  return scoreGuess(config, answer, guess) < WILD_MAX_SCORE;
 }
 
 /** "13× too low", "74 years early", "6 points high", "exact". */
