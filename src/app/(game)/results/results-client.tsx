@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Avatar } from "@/components/Avatar";
 import { NumberLine } from "@/components/NumberLine";
+import { QuestionFeedback } from "@/components/QuestionFeedback";
 import { RevealPanel } from "@/components/RevealPanel";
 import { ScoreBadge } from "@/components/ScoreBadge";
 import { ShareButton } from "@/components/ShareButton";
@@ -174,6 +175,17 @@ export function ResultsClient() {
           return (
             <div key={r.position} className="space-y-2">
               <RevealPanel position={r.position} isDemo={data.challenge.isDemo} data={{ ...r.reveal!, prompt: r.prompt, unit: r.unit, scoringType: r.scoringType, status: r.status }} />
+              {completed && data.feedback && (() => {
+                const mine = data.feedback.find((f) => f.position === r.position);
+                return (
+                  <QuestionFeedback
+                    date={data.challenge.date}
+                    position={r.position}
+                    initialReaction={mine?.reaction ?? null}
+                    initialReported={mine?.reported ?? false}
+                  />
+                );
+              })()}
               {all && all.median !== null && !r.reveal!.voided && (
                 <div className="card p-4">
                   <p className="label">Everyone · {all.submitted} guesses</p>

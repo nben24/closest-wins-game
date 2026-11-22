@@ -7,6 +7,8 @@ import { describeMiss, formatPoints, formatValue } from "@/lib/format";
 import { addDays, formatGameDate, isGameDate } from "@/lib/time";
 import { today } from "@/lib/server/challenges";
 import { dayAnswers, questionFlags, type AnswerPlayer, type AnswerQuestion, type AnswerRound } from "@/lib/server/admin/answers";
+import { challengeFeedback, type QuestionFeedbackSummary } from "@/lib/server/feedback";
+import { resolveReportsAction } from "@/app/admin/actions";
 
 /** Admin: every player's guess, points and miss for each question of a day. */
 
@@ -37,7 +39,36 @@ function median(xs: number[]): number | null {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-function QuestionPanel({ q, players }: { q: AnswerQuestion; players: AnswerPlayer[] }) {
+function FeedbackBlock({ fb, challengeId, position }: { fb: QuestionFeedbackSummary | undefined; challengeId: string; position: number }) {
+  if (!fb || (fb.up === 0 && fb.down === 0 && fb.reports.length === 0)) return null;
+  const open = fb.reports.filter((r) => !r.resolved);
+  return (
+    <div className="mt-3 rounded-xl bg-paper p-3 text-sm">
+      <p className="font-semibold">
+        Player feedback: 👍 {fb.up} · 👎 {fb.down}
+        {fb.reports.length > 0 && <> · {fb.reports.length} report{fb.reports.length === 1 ? "" : "s"}{open.length ? ` (${open.length} new)` : ""}</>}
+      </p>
+      {fb.reports.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {fb.reports.map((r, i) => (
+            <li key={i} className={r.resolved ? "text-ink-soft" : ""}>
+              <span className="font-bold">{r.name}:</span> “{r.text}”{r.resolved && " (handled)"}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open.length > 0 && (
+        <form action={resolveReportsAction} className="mt-2">
+          <input type="hidden" name="challengeId" value={challengeId} />
+          <input type="hidden" name="position" value={position} />
+          <button className="rounded-lg border border-line px-3 py-1 font-semibold">Mark reports handled</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function QuestionPanel({ q, players, fb, challengeId }: { q: AnswerQuestion; players: AnswerPlayer[]; fb?: QuestionFeedbackSummary; challengeId: string }) {
   const unit = q.unit ? ` ${q.unit}` : "";
   const rows = players
     .map((p) => ({ p, r: p.rounds[q.position] }))
@@ -85,6 +116,7 @@ function QuestionPanel({ q, players }: { q: AnswerQuestion; players: AnswerPlaye
         {avgPts !== null && <> · avg {formatPoints(avgPts)} pts</>}
         {bulls > 0 && <> · {bulls} bullseye{bulls === 1 ? "" : "s"}</>}
       </p>
+      <FeedbackBlock fb={fb} challengeId={challengeId} position={q.position} />
       {rows.length === 0 ? (
         <p className="mt-3 text-ink-soft">Nobody has answered this one yet.</p>
       ) : (
@@ -176,6 +208,7 @@ export default async function AdminAnswers(props: PageProps<"/admin/answers">) {
   const date = isGameDate(raw) && raw <= t ? raw : t;
   const view = sp.view === "player" ? "player" : "question";
   const data = await dayAnswers(date);
+  const feedback = data.challenge ? await challengeFeedback(data.challenge.id) : [];
   const q = (over: Record<string, string>) => {
     const s = new URLSearchParams({ ...(date !== t ? { date } : {}), ...(view !== "question" ? { view } : {}), ...over });
     for (const [k, v] of [...s.entries()]) if (!v) s.delete(k);
@@ -219,7 +252,9 @@ export default async function AdminAnswers(props: PageProps<"/admin/answers">) {
           ) : view === "player" ? (
             <PlayerGrid questions={data.questions} players={data.players} />
           ) : (
-            data.questions.map((question) => <QuestionPanel key={question.position} q={question} players={data.players} />)
+            data.questions.map((question) => (
+              <QuestionPanel key={question.position} q={question} players={data.players} challengeId={data.challenge!.id} fb={feedback.find((f) => f.position === question.position)} />
+            ))
           )}
         </>
       )}

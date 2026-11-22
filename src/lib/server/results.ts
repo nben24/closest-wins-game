@@ -8,6 +8,7 @@ import { groupComparisons, type GroupComparison } from "@/lib/server/groups";
 import type { RoundView } from "@/lib/server/play";
 import { recomputeAttempt } from "@/lib/server/play";
 import { everyoneStats, type EveryoneStats } from "@/lib/server/leaderboard";
+import { myFeedback, type MyFeedback } from "@/lib/server/feedback";
 
 export interface ResultsView {
   challenge: { id: string; date: string; number: number; isDemo: boolean };
@@ -16,6 +17,8 @@ export interface ResultsView {
   groups: GroupComparison[] | null;
   /** Comparison with everyone who finished (only after the viewer completes). */
   everyone: EveryoneStats | null;
+  /** The viewer's own reactions and reports (only once completed). */
+  feedback: MyFeedback[] | null;
 }
 
 /** A player's own results for a date, plus group comparisons once completed. */
@@ -31,7 +34,7 @@ export async function getResults(playerId: string, date: string): Promise<Result
     "select id, status, total_score, rounds_finished from attempts where player_id = $1 and challenge_id = $2",
     [playerId, ch.id],
   );
-  if (!attempt) return { challenge, attempt: null, rounds: [], groups: null, everyone: null };
+  if (!attempt) return { challenge, attempt: null, rounds: [], groups: null, everyone: null, feedback: null };
 
   // Finalize anything expired so results are consistent.
   const at = now();
@@ -97,6 +100,7 @@ export async function getResults(playerId: string, date: string): Promise<Result
     rounds,
     groups: attempt.status === "completed" ? await groupComparisons(playerId, ch.id) : null,
     everyone: attempt.status === "completed" ? await everyoneStats(playerId, ch.id) : null,
+    feedback: attempt.status === "completed" ? await myFeedback(playerId, ch.id) : null,
   };
 }
 

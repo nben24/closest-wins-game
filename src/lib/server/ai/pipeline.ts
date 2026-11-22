@@ -292,16 +292,18 @@ interface PlayHistory {
 /** What players have seen and how they did: feeds variety planning and the generator's feedback. */
 async function playHistory(db: Sql): Promise<PlayHistory> {
   const day = today();
-  const played = await db.query<{ date: string; prompt: string; difficulty: string; players: number; avg: number | null }>(
+  const played = await db.query<{ date: string; prompt: string; difficulty: string; players: number; avg: number | null; up: number; down: number }>(
     `select dc.challenge_date::text as date, cq.prompt, cq.difficulty,
-            count(r.*)::int as players, avg(r.score)::float8 as avg
+            count(r.*)::int as players, avg(r.score)::float8 as avg,
+            (select count(*)::int from question_feedback f where f.challenge_id = dc.id and f.position = cq.position and f.reaction = 1) as up,
+            (select count(*)::int from question_feedback f where f.challenge_id = dc.id and f.position = cq.position and f.reaction = -1) as down
        from daily_challenges dc
        join challenge_questions cq on cq.challenge_id = dc.id
        join attempts a on a.challenge_id = dc.id and a.status = 'completed'
        join rounds r on r.attempt_id = a.id and r.position = cq.position
       where dc.status = 'published' and not dc.is_demo and not cq.voided
         and dc.challenge_date >= $1::date and dc.challenge_date < $2::date
-      group by dc.challenge_date, cq.position, cq.prompt, cq.difficulty`,
+      group by dc.id, dc.challenge_date, cq.position, cq.prompt, cq.difficulty`,
     [addDays(day, -60), day],
   );
   const recent = await db.query<{ prompt: string; storedType: string | null; scoringType: string; unit: string; category: string }>(
@@ -314,7 +316,7 @@ async function playHistory(db: Sql): Promise<PlayHistory> {
     [addDays(day, -21)],
   );
   return {
-    played: played.map((r) => ({ date: r.date, prompt: r.prompt, difficulty: r.difficulty, players: r.players, avgPoints: Number(r.avg ?? 0) })),
+    played: played.map((r) => ({ date: r.date, prompt: r.prompt, difficulty: r.difficulty, players: r.players, avgPoints: Number(r.avg ?? 0), up: r.up, down: r.down })),
     recent: recent.map((r) => ({ prompt: r.prompt, type: typeOf(r) })),
   };
 }

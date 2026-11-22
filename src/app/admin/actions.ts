@@ -15,6 +15,7 @@ import { fillSchedule, today } from "@/lib/server/challenges";
 import { ApiError } from "@/lib/server/errors";
 import { getDb } from "@/lib/db";
 import { audit } from "@/lib/server/notify";
+import { resolveReports } from "@/lib/server/feedback";
 import { checkSource } from "@/lib/server/source-check";
 import { addDays } from "@/lib/time";
 
@@ -292,4 +293,14 @@ export async function resolveNotificationAction(f: FormData): Promise<void> {
   const admin = await requireAdmin();
   await resolveNotification(str(f, "id"), admin.actor);
   revalidatePath("/admin");
+}
+
+export async function resolveReportsAction(f: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const challengeId = str(f, "challengeId");
+  const position = Number(str(f, "position"));
+  if (!/^[0-9a-f-]{36}$/i.test(challengeId) || !Number.isInteger(position) || position < 1 || position > 5) return;
+  await resolveReports(challengeId, position);
+  await audit(admin.actor, "resolve_reports", "daily_challenge", challengeId, { position });
+  revalidatePath("/admin/answers");
 }

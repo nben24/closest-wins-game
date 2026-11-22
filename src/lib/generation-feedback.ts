@@ -16,6 +16,9 @@ export interface PlayedQuestion {
   /** Finished players who saw the question (blanks and time-outs count as 0 points). */
   players: number;
   avgPoints: number;
+  /** Players' "fun question?" thumbs (optional, from the results screen). */
+  up?: number;
+  down?: number;
 }
 
 /** What each difficulty should average with real players (points out of 1000). */
@@ -36,7 +39,15 @@ export interface FeedbackSummary {
   flops: PlayedQuestion[];
   /** Labeled easy, but players scored like it was hard. */
   falseEasy: PlayedQuestion[];
+  /** Players' favorites and least favorites by thumbs up/down (whatever they scored). */
+  loved: PlayedQuestion[];
+  disliked: PlayedQuestion[];
 }
+
+/** Votes needed before a question's thumbs count. */
+export const MIN_VOTES = 3;
+const votes = (q: PlayedQuestion) => (q.up ?? 0) + (q.down ?? 0);
+const net = (q: PlayedQuestion) => ((q.up ?? 0) - (q.down ?? 0)) / Math.max(1, votes(q));
 
 export function summarizePlay(played: PlayedQuestion[]): FeedbackSummary | null {
   const usable = played.filter((q) => q.players >= MIN_PLAYERS && Number.isFinite(q.avgPoints));
@@ -54,6 +65,8 @@ export function summarizePlay(played: PlayedQuestion[]): FeedbackSummary | null 
     good: byScore.filter((q) => q.avgPoints >= GOOD).slice(0, 6),
     flops: byScore.filter((q) => q.avgPoints < FLOP).reverse().slice(0, 6),
     falseEasy: usable.filter((q) => q.difficulty === "easy" && q.avgPoints < 250).sort((a, b) => a.avgPoints - b.avgPoints).slice(0, 4),
+    loved: usable.filter((q) => votes(q) >= MIN_VOTES && net(q) >= 0.5).sort((a, b) => net(b) - net(a) || votes(b) - votes(a)).slice(0, 6),
+    disliked: usable.filter((q) => votes(q) >= MIN_VOTES && net(q) <= -0.3).sort((a, b) => net(a) - net(b) || votes(b) - votes(a)).slice(0, 6),
   };
 }
 
@@ -75,6 +88,9 @@ export function feedbackText(played: PlayedQuestion[], recentPrompts: string[]):
 ${levels}`);
     if (s.good.length) parts.push(`Questions players did well on. They had a way in; aim for that feel, with new subjects and formulas:\n${s.good.map(line).join("\n")}`);
     if (s.flops.length) parts.push(`Flops: players had no way in and were typing random numbers. Don't write anything like these:\n${s.flops.map(line).join("\n")}`);
+    const thumbs = (q: PlayedQuestion) => `- "${q.prompt}" (👍 ${q.up ?? 0}, 👎 ${q.down ?? 0}; players averaged ${Math.round(q.avgPoints)})`;
+    if (s.loved.length) parts.push(`Players' favorites, by their own thumbs up. Write more questions with this feel:\n${s.loved.map(thumbs).join("\n")}`);
+    if (s.disliked.length) parts.push(`Players gave these a thumbs down. Avoid this kind of question:\n${s.disliked.map(thumbs).join("\n")}`);
     if (s.falseEasy.length) parts.push(`Labeled easy, but players struggled. These are NOT easy; easy means most players get close:\n${s.falseEasy.map(line).join("\n")}`);
   }
   if (recentPrompts.length) {
