@@ -69,6 +69,9 @@ export const TOLERANCE_LIMITS: Record<ScoringType, { min: number; max: number }>
   percent: { min: 0.5, max: 50 },
 };
 
+/** Absolute answers at or below this get the small-count tolerance floor (see fairTolerance). */
+export const SMALL_COUNT_MAX = 30;
+
 /**
  * Fairer tolerance floors (from real play data: strict tolerances turned good
  * estimates into zeros). Never tightens a tolerance, only loosens it.
@@ -76,7 +79,9 @@ export const TOLERANCE_LIMITS: Record<ScoringType, { min: number; max: number }>
  *  - year: grows with how long ago it was — about ±3 years for recent events
  *    up to ±25 for very old ones (people are fuzzier about older dates)
  *  - percent: at least 6 points
- * Mirrored in supabase/migrations/20261115000000_quality_and_prizes.sql.
+ *  - absolute, answers up to 30: at least a quarter of the answer, and 1.5
+ * Mirrored in supabase/migrations/20261115000000_quality_and_prizes.sql and
+ * 20261122000000_small_count_tolerance.sql.
  */
 export function fairTolerance(
   type: ScoringType,
@@ -89,6 +94,13 @@ export function fairTolerance(
   if (type === "ratio") return Math.max(tolerance, difficulty === "easy" ? 1.35 : difficulty === "medium" ? 1.5 : 1.8);
   if (type === "year") return Math.max(tolerance, Math.min(25, Math.max(3, Math.round((currentYear - answer) / 8))));
   if (type === "percent") return Math.max(tolerance, 6);
+  // Small counts (Oscars won, countries bordering Germany): half points within
+  // a quarter of the answer, never tighter than 1.5. In live play, small-count
+  // questions averaged 224 points out of 1000 (Ben-Hur's 11 Oscars: 19), well
+  // below every other scoring type. Larger absolute answers keep the tolerance they were given.
+  if (type === "absolute" && Math.abs(answer) <= SMALL_COUNT_MAX) {
+    return Math.max(tolerance, 1.5, Math.round(Math.abs(answer) * 0.25 * 10) / 10);
+  }
   return tolerance;
 }
 

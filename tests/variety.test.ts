@@ -100,6 +100,18 @@ describe("daily set variety", () => {
     expect(set.some((q) => q.category === "sports")).toBe(false);
   });
 
+  it("treats a launch price and a 'what did it cost back then' as the same kind of question", () => {
+    const p = pool();
+    for (let day = 1; day <= 6; day++) {
+      const set = pickDailySet(p, { seed: `2026-12-0${day}` })!;
+      expect(set.filter((q) => q.type === "price" || q.type === "then_vs_now").length).toBeLessThanOrEqual(1);
+    }
+    const yesterdayPrice = p.find((q) => q.type === "price")!;
+    const recent = [{ prompt: yesterdayPrice.prompt, subjectKey: yesterdayPrice.subjectKey, date: "2026-12-01", type: "price" as QuestionType, category: yesterdayPrice.category }];
+    const next = pickDailySet(p.filter((q) => q !== yesterdayPrice), { seed: "2026-12-02", date: "2026-12-02", recent })!;
+    expect(next.some((q) => q.type === "then_vs_now" || q.type === "price")).toBe(false);
+  });
+
   it("still fills a day when the bank has little variety", () => {
     const same = pool().map((q) => ({ ...q, type: "year" as QuestionType, category: "entertainment" }));
     expect(pickDailySet(same, { seed: "2026-12-03" })).toHaveLength(5);

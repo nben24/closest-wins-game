@@ -1,5 +1,5 @@
 import { QUESTIONS_PER_DAY } from "@/config/game";
-import type { QuestionType } from "@/lib/question-types";
+import { familyOf, type QuestionType } from "@/lib/question-types";
 import { sameSubject, similarity } from "@/lib/similarity";
 
 /**
@@ -11,6 +11,8 @@ import { sameSubject, similarity } from "@/lib/similarity";
  *     one hard question (two only in an emergency reserve fill).
  *  2. Five different categories where possible (so at most one sports question).
  *  3. Five different question types ("what year", "how far", "price"…) where possible.
+ *     Types in the same family (a launch price and a "what did it cost in
+ *     1980") count as one, since players feel them as the same question.
  *  4. No category three days in a row, no type that the neighbouring days
  *     already use, and types seen less in
  *     the surrounding two weeks are preferred — so the same kind of question
@@ -77,10 +79,10 @@ export function pickDailySet(
   const recent = opts.recent ?? [];
   const date = opts.date ?? opts.seed;
   const near = (days: number) => recent.filter((r) => r.date && dayGap(r.date, date) <= days);
-  const adjacentTypes = new Set(near(1).map((r) => r.type).filter(Boolean));
+  const adjacentTypes = new Set(near(1).map((r) => r.type && familyOf(r.type)).filter(Boolean));
   const typeSeen = new Map<string, number>();
   const catSeen = new Map<string, number>();
-  for (const r of near(7)) if (r.type) typeSeen.set(r.type, (typeSeen.get(r.type) ?? 0) + 1);
+  for (const r of near(7)) if (r.type) typeSeen.set(familyOf(r.type), (typeSeen.get(familyOf(r.type)) ?? 0) + 1);
   // Categories: the day before/after counts double, two days away counts once.
   for (const r of near(2)) if (r.category) catSeen.set(r.category, (catSeen.get(r.category) ?? 0) + (r.date && dayGap(r.date, date) <= 1 ? 2 : 1));
 
@@ -95,7 +97,7 @@ export function pickDailySet(
     const j = Math.floor(rand() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  const weight = new Map(shuffled.map((q) => [q, (typeSeen.get(q.type) ?? 0) + 0.75 * (catSeen.get(q.category) ?? 0) + rand() * 1.5]));
+  const weight = new Map(shuffled.map((q) => [q, (typeSeen.get(familyOf(q.type)) ?? 0) + 0.75 * (catSeen.get(q.category) ?? 0) + rand() * 1.5]));
   const ordered = shuffled.sort((a, b) => weight.get(a)! - weight.get(b)!);
 
   type Pass = { distinctCategories: boolean; distinctTypes: boolean; avoidAdjacentTypes: boolean; avoidStreaks?: boolean; avoidRecent: boolean; difficultyTargets: boolean; maxHard: number };
@@ -119,8 +121,8 @@ export function pickDailySet(
         if (want && q.difficulty !== want) continue;
         if (q.difficulty === "hard" && picked.filter((p) => p.difficulty === "hard").length >= pass.maxHard) continue;
         if (pass.distinctCategories && picked.some((p) => p.category === q.category)) continue;
-        if (pass.distinctTypes && q.type !== "other" && picked.some((p) => p.type === q.type)) continue;
-        if (pass.avoidAdjacentTypes && adjacentTypes.has(q.type)) continue;
+        if (pass.distinctTypes && q.type !== "other" && picked.some((p) => familyOf(p.type) === familyOf(q.type))) continue;
+        if (pass.avoidAdjacentTypes && adjacentTypes.has(familyOf(q.type))) continue;
         if (pass.avoidStreaks && streakCats.has(q.category)) continue;
         if (conflicts(q, picked)) continue;
         if (pass.avoidRecent && conflicts(q, recent)) continue;

@@ -26,6 +26,8 @@ export interface ProposeInput {
   typePlan?: string[];
   /** Types the bank already has plenty of. */
   crowdedTypes?: string[];
+  /** How real players scored recently and what was played (see generation-feedback). */
+  feedback?: string;
   maxTokens: number;
 }
 

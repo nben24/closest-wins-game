@@ -125,3 +125,18 @@ export function crowdedTypes(bankCounts: Partial<Record<QuestionType, number>>, 
     .slice(0, n)
     .map(([t]) => t);
 }
+
+/**
+ * Types that feel like the same question to players. "What did the Walkman
+ * cost at launch" and "what did a movie ticket cost in 1980" are both "guess
+ * a price", so variety rules treat them as one.
+ */
+const FAMILY: Partial<Record<QuestionType, string>> = { price: "price", then_vs_now: "price" };
+export function familyOf(t: QuestionType): string {
+  return FAMILY[t] ?? t;
+}
+/** Every type in the same family as `t` (including `t`). */
+export function familyMembers(t: QuestionType): QuestionType[] {
+  const f = familyOf(t);
+  return QUESTION_TYPES.filter((x) => familyOf(x) === f);
+}

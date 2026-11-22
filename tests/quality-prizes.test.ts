@@ -27,6 +27,15 @@ describe("fairer tolerances", () => {
     // Coca-Cola 1902 (16 years off an 1886 answer) used to score 141 at ±8
     expect(scoreGuess({ type: "year", tolerance: fairTolerance("year", 8, 1886, "medium", 2026) }, 1886, 1902)).toBeGreaterThan(500);
   });
+  it("gives small counts a tolerance of at least a quarter of the answer", () => {
+    expect(fairTolerance("absolute", 1, 11, "hard")).toBe(2.8); // Ben-Hur's 11 Oscars
+    expect(fairTolerance("absolute", 1, 6, "easy")).toBe(1.5); // floor
+    expect(fairTolerance("absolute", 4, 11, "hard")).toBe(4); // never tightens
+    expect(fairTolerance("absolute", 5, 94.8, "medium")).toBe(5); // big answers keep their own tolerance
+    // guessing 8 for 11 now earns real points instead of almost none
+    expect(scoreGuess({ type: "absolute", tolerance: 1 }, 11, 8)).toBe(27);
+    expect(scoreGuess({ type: "absolute", tolerance: fairTolerance("absolute", 1, 11, "hard") }, 11, 8)).toBeGreaterThan(450);
+  });
   it("recognizes year typos", () => {
     expect(isPlausibleYear(0)).toBe(false);
     expect(isPlausibleYear(12)).toBe(false);

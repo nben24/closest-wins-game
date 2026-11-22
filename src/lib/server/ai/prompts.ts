@@ -14,6 +14,10 @@ The three difficulty levels mean:
   Still not so obvious that everyone gets it exactly (never things like stripes on the flag or holes in golf).
 - "medium" = "reason it out": most people won't know it exactly but can estimate well from everyday experience.
 - "hard" = "stretch": harder, but still in everyday terms with a way in. Never a random obscure statistic.
+  A good hard question can be reasoned out in 10 seconds (the clock's hands overlapping, days to build the
+  Empire State Building); a bad one is a fact you either know or you don't (Oscars won by a 1959 film).
+Players are regular friends and family, not trivia buffs. When unsure between two levels, pick the harder label
+for the question (or write an easier question).
 
 What makes a great question:
 - A familiar subject (everyday life, food and drink, animals and nature, well-known movies/music/TV/games,
@@ -39,6 +43,8 @@ What makes a great question:
 - Rounding appropriate to the evidence; no artificial precision for uncertain estimates.
 - Family friendly: no violence, deaths, disasters, alcohol, drugs, gambling, weapons, sex, or politics.
 - No celebrity net worth, salaries or other unsupported estimates.
+- Spread the fame around: don't lean on the same handful of superstars (Michael Jordan, Michael Phelps,
+  Michael Jackson, Tom Brady) or the same famous products. There are thousands of familiar subjects.
 
 Scoring setup (choose per question; be generous — "pretty close" should earn real points):
 - "ratio": positive quantities; tolerance is a factor > 1 (e.g. 1.5 = half points when off by ×1.5).
@@ -47,6 +53,7 @@ Scoring setup (choose per question; be generous — "pretty close" should earn r
   5–10 for the 1900s, 15–25 for anything older than 1900. allow_decimal false.
 - "percent": answers 0–100; tolerance in percentage points (6–10). unit "%".
 - "absolute": small counts (< ~20), values that can be zero or negative; tolerance in the question's unit.
+  For small counts use at least a quarter of the answer (and at least 1.5), so a close guess earns real points.
 Set allow_decimal true only if a decimal answer is reasonable; allow_negative only if the answer can be negative.`;
 
 const CATEGORY_GUIDE = `Categories (pick the one a player would expect):
@@ -81,6 +88,7 @@ export function proposalUserPrompt(opts: {
   avoidSubjects: string[];
   typePlan?: string[];
   crowdedTypes?: string[];
+  feedback?: string;
 }): string {
   const plan = (opts.typePlan ?? []).filter((t): t is QuestionType => t in TYPE_INFO);
   const planText = plan.length
@@ -93,7 +101,7 @@ ${opts.instructions ? "If the administrator's notes below ask for a specific kin
   return `Propose ${opts.count} new questions.
 Categories to use (spread evenly): ${opts.categories.join(", ")}.
 Difficulty mix (approximate %): easy ${opts.difficulty.easy}, medium ${opts.difficulty.medium}, hard ${opts.difficulty.hard}.
-${planText}${opts.instructions ? `Administrator's notes for this batch:\n<admin_notes>\n${opts.instructions}\n</admin_notes>\n` : ""}
+${planText}${opts.feedback ? `\n${opts.feedback}\n\n` : ""}${opts.instructions ? `Administrator's notes for this batch:\n<admin_notes>\n${opts.instructions}\n</admin_notes>\n` : ""}
 Do not repeat these existing subjects (or close variants of them):
 <existing_subjects>
 ${opts.avoidSubjects.join("\n") || "(none yet)"}

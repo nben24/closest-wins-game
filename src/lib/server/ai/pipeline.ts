@@ -12,8 +12,10 @@ import { audit, notifyAdmin } from "@/lib/server/notify";
 import { checkSource, type SourceCheck } from "@/lib/server/source-check";
 import { cleanPlayerPeriod } from "@/lib/format";
 import { fairTolerance } from "@/lib/scoring";
-import { crowdedTypes, perJobTypeCap, planTypes, typeOf, type QuestionType } from "@/lib/question-types";
-import { STORED_TYPE_SQL } from "@/lib/server/challenges";
+import { crowdedTypes, familyMembers, perJobTypeCap, planTypes, typeOf, type QuestionType } from "@/lib/question-types";
+import { feedbackText, type PlayedQuestion } from "@/lib/generation-feedback";
+import { addDays } from "@/lib/time";
+import { STORED_TYPE_SQL, today } from "@/lib/server/challenges";
 
 /**
  * Durable, resumable generation jobs.
@@ -277,12 +279,54 @@ async function step(job: JobRow, s: AppSettings, provider: AiProvider): Promise<
   return false;
 }
 
+/** How many extra "bank" questions each recently played one counts as when planning types. */
+const RECENT_TYPE_WEIGHT = 3;
+
+interface PlayHistory {
+  /** Published games from the last 60 days (not today), with how players scored. */
+  played: PlayedQuestion[];
+  /** Questions played in the last 21 days or already scheduled, newest first. */
+  recent: { prompt: string; type: QuestionType }[];
+}
+
+/** What players have seen and how they did: feeds variety planning and the generator's feedback. */
+async function playHistory(db: Sql): Promise<PlayHistory> {
+  const day = today();
+  const played = await db.query<{ date: string; prompt: string; difficulty: string; players: number; avg: number | null }>(
+    `select dc.challenge_date::text as date, cq.prompt, cq.difficulty,
+            count(r.*)::int as players, avg(r.score)::float8 as avg
+       from daily_challenges dc
+       join challenge_questions cq on cq.challenge_id = dc.id
+       join attempts a on a.challenge_id = dc.id and a.status = 'completed'
+       join rounds r on r.attempt_id = a.id and r.position = cq.position
+      where dc.status = 'published' and not dc.is_demo and not cq.voided
+        and dc.challenge_date >= $1::date and dc.challenge_date < $2::date
+      group by dc.challenge_date, cq.position, cq.prompt, cq.difficulty`,
+    [addDays(day, -60), day],
+  );
+  const recent = await db.query<{ prompt: string; storedType: string | null; scoringType: string; unit: string; category: string }>(
+    `select coalesce(cq.prompt, q.prompt) as prompt, q.scoring_type as "scoringType", q.unit, q.category, ${STORED_TYPE_SQL} as "storedType"
+       from challenge_questions cq
+       join daily_challenges dc on dc.id = cq.challenge_id
+       join questions q on q.id = cq.question_id
+      where not dc.is_demo and dc.challenge_date >= $1::date
+      order by dc.challenge_date desc, cq.position`,
+    [addDays(day, -21)],
+  );
+  return {
+    played: played.map((r) => ({ date: r.date, prompt: r.prompt, difficulty: r.difficulty, players: r.players, avgPoints: Number(r.avg ?? 0) })),
+    recent: recent.map((r) => ({ prompt: r.prompt, type: typeOf(r) })),
+  };
+}
+
 /**
  * Variety by default: count question types in the live bank (unused approved,
  * review and draft questions, plus anything played in the last 30 days) and in
  * this job so far, then plan one different, under-represented type per question.
+ * Types played in the last three weeks count extra (with their family, so a
+ * recent launch price also holds back "what did it cost in 1980").
  */
-async function typePlanFor(db: Sql, job: JobRow, count: number, jobTypes: (string | null)[]) {
+async function typePlanFor(db: Sql, job: JobRow, count: number, jobTypes: (string | null)[], recent: PlayHistory["recent"]) {
   const rows = await db.query<{ prompt: string; storedType: string | null; scoringType: string; unit: string; category: string }>(
     `select q.prompt, q.scoring_type as "scoringType", q.unit, q.category, ${STORED_TYPE_SQL} as "storedType"
        from questions q
@@ -295,6 +339,10 @@ async function typePlanFor(db: Sql, job: JobRow, count: number, jobTypes: (strin
   for (const r of rows) {
     const t = typeOf(r);
     bank[t] = (bank[t] ?? 0) + 1;
+  }
+  for (const r of recent) {
+    if (r.type === "other") continue;
+    for (const t of familyMembers(r.type)) bank[t] = (bank[t] ?? 0) + RECENT_TYPE_WEIGHT;
   }
   const inJob: Partial<Record<QuestionType, number>> = {};
   for (const t of jobTypes) {
@@ -313,7 +361,8 @@ async function proposeBatch(job: JobRow, count: number, s: AppSettings, provider
     "select proposal->>'subject' as s, proposal->>'question_type' as t from generation_candidates where job_id = $1 and status <> 'rejected'",
     [job.id],
   );
-  const { plan, crowded } = await typePlanFor(db, job, count, jobSubjects.map((r) => r.t));
+  const history = await playHistory(db);
+  const { plan, crowded } = await typePlanFor(db, job, count, jobSubjects.map((r) => r.t), history.recent);
   await setJob(job.id, { progress_note: `Proposing ${count} question idea(s)…` });
   let result: Awaited<ReturnType<AiProvider["propose"]>>;
   try {
@@ -325,6 +374,7 @@ async function proposeBatch(job: JobRow, count: number, s: AppSettings, provider
       avoidSubjects: [...subjects, ...jobSubjects].map((r) => r.s).filter(Boolean),
       typePlan: plan,
       crowdedTypes: crowded,
+      feedback: feedbackText(history.played, history.recent.map((r) => r.prompt)),
       maxTokens: s.maxOutputTokensPerCall,
     });
   } catch (e) {
