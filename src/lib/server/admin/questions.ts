@@ -7,6 +7,7 @@ import { now } from "@/lib/server/clock";
 import { ApiError } from "@/lib/server/errors";
 import { audit } from "@/lib/server/notify";
 import { recomputeAttempt } from "@/lib/server/play";
+import { replaceRemovedScheduled } from "@/lib/server/challenges";
 
 export interface QuestionRow {
   id: string;
@@ -241,6 +242,8 @@ export async function setQuestionStatus(id: string, status: "rejected" | "archiv
     await sql.query("update questions set status = $2, review_notes = coalesce($3, review_notes), updated_at = now() where id = $1", [id, status, note ?? null]);
     await audit(actor, `set_${status}`, "question", id, { from: q.status, note }, sql);
   });
+  // A rejected/archived question that was already on an upcoming day gets swapped out now.
+  if (status !== "review") await replaceRemovedScheduled(actor);
 }
 
 /**

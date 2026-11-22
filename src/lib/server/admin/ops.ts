@@ -13,7 +13,11 @@ export interface UpcomingChallenge {
   status: string;
   isDemo: boolean;
   source: string;
-  questions: { position: number; questionId: string; prompt: string; category: string; difficulty: string; answer: number; unit: string; voided: boolean; status: string; type: QuestionType }[];
+  questions: {
+    position: number; questionId: string; prompt: string; category: string; difficulty: string; answer: number; unit: string; voided: boolean; status: string; type: QuestionType;
+    /** The question this slot replaced (rejected or archived after scheduling), if any. */
+    replaced: { prompt: string; at: string } | null;
+  }[];
   attempts: number;
   completed: number;
 }
@@ -28,17 +32,20 @@ export async function listChallenges(from: string, days: number): Promise<Upcomi
   );
   const out: UpcomingChallenge[] = [];
   for (const c of chs) {
-    const qs = await db.query<{ position: number; question_id: string; prompt: string; category: string; difficulty: string; answer: number; unit: string; voided: boolean; status: string; scoring_type: string; stored_type: string | null }>(
+    const qs = await db.query<{ position: number; question_id: string; prompt: string; category: string; difficulty: string; answer: number; unit: string; voided: boolean; status: string; scoring_type: string; stored_type: string | null; replaced_prompt: string | null; replaced_at: Date | null }>(
       `select cq.position, cq.question_id, coalesce(cq.prompt, q.prompt) as prompt, q.category, q.difficulty,
               coalesce(cq.answer, q.answer) as answer, coalesce(cq.unit, q.unit) as unit, cq.voided, q.status,
-              q.scoring_type, ${STORED_TYPE_SQL} as stored_type
-         from challenge_questions cq join questions q on q.id = cq.question_id where cq.challenge_id = $1 order by cq.position`,
+              q.scoring_type, ${STORED_TYPE_SQL} as stored_type, oq.prompt as replaced_prompt, cq.replaced_at
+         from challenge_questions cq join questions q on q.id = cq.question_id
+         left join questions oq on oq.id = cq.replaced_question_id
+        where cq.challenge_id = $1 order by cq.position`,
       [c.id],
     );
     out.push({
       id: c.id, date: c.challenge_date, number: c.number, status: c.status, isDemo: c.is_demo, source: c.source, attempts: c.attempts, completed: c.completed,
       questions: qs.map((q) => ({ position: q.position, questionId: q.question_id, prompt: q.prompt, category: q.category, difficulty: q.difficulty, answer: q.answer, unit: q.unit, voided: q.voided, status: q.status,
-        type: typeOf({ storedType: q.stored_type, prompt: q.prompt, scoringType: q.scoring_type, unit: q.unit, category: q.category }) })),
+        type: typeOf({ storedType: q.stored_type, prompt: q.prompt, scoringType: q.scoring_type, unit: q.unit, category: q.category }),
+        replaced: q.replaced_prompt && q.replaced_at ? { prompt: q.replaced_prompt, at: new Date(q.replaced_at).toISOString() } : null })),
     });
   }
   return out;

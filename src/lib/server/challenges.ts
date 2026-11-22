@@ -3,7 +3,7 @@ import { QUESTIONS_PER_DAY } from "@/config/game";
 import { getDb, type Sql } from "@/lib/db";
 import { env } from "@/lib/env";
 import { typeOf } from "@/lib/question-types";
-import { pickDailySet, type NearbyQuestion, type PoolQuestion } from "@/lib/scheduler";
+import { pickDailySet, pickReplacement, type NearbyQuestion, type PoolQuestion } from "@/lib/scheduler";
 import { addDays, challengeNumber, gameDateOf } from "@/lib/time";
 import { now } from "@/lib/server/clock";
 import { audit, notifyAdmin } from "@/lib/server/notify";
@@ -94,6 +94,68 @@ export async function scheduleDate(
 }
 
 /**
+ * Replace scheduled (not yet published) questions that were rejected or
+ * archived, right away instead of at publish time, so the schedule always
+ * shows the real question. The slot remembers what it replaced. Questions sent
+ * back to review are left alone: they can still be re-approved before the day
+ * goes live (and are swapped at publish if not). Safe to call any time.
+ */
+export async function replaceRemovedScheduled(actor = "system"): Promise<{ replaced: number; stuck: number }> {
+  const db = await getDb();
+  return db.tx(async (sql) => {
+    const slots = await sql.query<{ challenge_id: string; date: string; position: number; question_id: string; difficulty: PoolQuestion["difficulty"] }>(
+      `select cq.challenge_id, dc.challenge_date::text as date, cq.position, cq.question_id, q.difficulty
+         from challenge_questions cq
+         join daily_challenges dc on dc.id = cq.challenge_id
+         join questions q on q.id = cq.question_id
+        where dc.status = 'scheduled' and q.status in ('rejected', 'archived')
+        order by dc.challenge_date, cq.position`,
+    );
+    if (!slots.length) return { replaced: 0, stuck: 0 };
+    let pool = await eligiblePool(sql);
+    let replaced = 0;
+    let stuck = 0;
+    for (const slot of slots) {
+      await lockDate(sql, slot.date);
+      const still = await sql.one<{ question_id: string; status: string }>(
+        `select cq.question_id, dc.status from challenge_questions cq join daily_challenges dc on dc.id = cq.challenge_id
+          where cq.challenge_id = $1 and cq.position = $2`,
+        [slot.challenge_id, slot.position],
+      );
+      if (!still || still.status !== "scheduled" || still.question_id !== slot.question_id) continue; // published or changed meanwhile
+      const day = await sql.query<Omit<PoolQuestion, "type"> & TypedRow>(
+        `select q.id, q.prompt, q.category, q.difficulty, q.subject_key as "subjectKey", q.scoring_type as "scoringType", q.unit, ${STORED_TYPE_SQL} as "storedType"
+           from challenge_questions cq join questions q on q.id = cq.question_id
+          where cq.challenge_id = $1 and cq.position <> $2 and q.status = 'approved'`,
+        [slot.challenge_id, slot.position],
+      );
+      const choice = pickReplacement(pool, {
+        difficulty: slot.difficulty,
+        day: day.map((r) => ({ id: r.id, prompt: r.prompt, category: r.category, difficulty: r.difficulty, subjectKey: r.subjectKey, type: typeOf(r) })),
+        nearby: await recentSubjects(sql, slot.date),
+        date: slot.date,
+        seed: `${slot.date}:${slot.position}:${slot.question_id}`,
+      });
+      if (!choice) {
+        stuck++;
+        continue;
+      }
+      await sql.query(
+        `update challenge_questions set question_id = $3, replaced_question_id = $4, replaced_at = $5 where challenge_id = $1 and position = $2`,
+        [slot.challenge_id, slot.position, choice.id, slot.question_id, now()],
+      );
+      await audit(actor, "auto_replace", "daily_challenge", slot.challenge_id, { date: slot.date, position: slot.position, from: slot.question_id, to: choice.id }, sql);
+      pool = pool.filter((q) => q.id !== choice.id);
+      replaced++;
+    }
+    if (stuck) {
+      await notifyAdmin("replace_stuck", "error", `${stuck} scheduled question(s) were removed but there's no approved question left to replace them. Generate or approve more.`, "replace_stuck", sql);
+    }
+    return { replaced, stuck };
+  });
+}
+
+/**
  * Publish atomically: verify each scheduled question is still approved (and
  * allowed), replace any that are not from the reserve, snapshot every field
  * players are judged on, then flip the status. After this the database
@@ -122,7 +184,10 @@ export async function publishChallenge(sql: Sql, challengeId: string, actor: str
     for (const s of bad) {
       await sql.query("delete from challenge_questions where challenge_id = $1 and position = $2", [challengeId, s.position]);
     }
-    const need = [...bad.map((b) => ({ position: b.position, difficulty: b.difficulty })), ...missingPositions.map((p) => ({ position: p, difficulty: "medium" }))];
+    const need: { position: number; difficulty: string; old?: string }[] = [
+      ...bad.map((b) => ({ position: b.position, difficulty: b.difficulty, old: b.question_id })),
+      ...missingPositions.map((p) => ({ position: p, difficulty: "medium" })),
+    ];
     const usedIds = new Set(keep.map((k) => k.question_id));
     const dayTypes = new Set<string>(keep.map((k) => typeOf(k)));
     const dayCats = new Set(keep.map((k) => k.category));
@@ -139,11 +204,10 @@ export async function publishChallenge(sql: Sql, challengeId: string, actor: str
       usedIds.add(choice.id);
       dayTypes.add(choice.type);
       dayCats.add(choice.category);
-      await sql.query("insert into challenge_questions (challenge_id, position, question_id) values ($1, $2, $3)", [
-        challengeId,
-        n.position,
-        choice.id,
-      ]);
+      await sql.query(
+        "insert into challenge_questions (challenge_id, position, question_id, replaced_question_id, replaced_at) values ($1, $2, $3, $4, $5)",
+        [challengeId, n.position, choice.id, n.old ?? null, n.old ? now() : null],
+      );
     }
     await notifyAdmin(
       "publish_replaced",

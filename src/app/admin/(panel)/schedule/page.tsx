@@ -4,13 +4,15 @@ import { Badge, inputCls, Panel } from "@/components/admin/ui";
 import { formatValue } from "@/lib/format";
 import { addDays, formatGameDate } from "@/lib/time";
 import { listChallenges } from "@/lib/server/admin/ops";
-import { eligiblePool, inventoryStatus, today } from "@/lib/server/challenges";
+import { eligiblePool, inventoryStatus, replaceRemovedScheduled, today } from "@/lib/server/challenges";
 import { getDb } from "@/lib/db";
 import type { ScoringType } from "@/lib/scoring";
 import { TYPE_INFO } from "@/lib/question-types";
 
 export default async function SchedulePage() {
   const t = today();
+  // Questions rejected elsewhere (review page, SQL editor) are swapped out before showing the schedule.
+  const swapped = await replaceRemovedScheduled("admin:schedule-page");
   const db = await getDb();
   const [past, upcoming, inv, pool] = await Promise.all([listChallenges(addDays(t, -7), 7), listChallenges(t, 35), inventoryStatus(), eligiblePool(db)]);
   const types = new Map(
@@ -45,6 +47,16 @@ export default async function SchedulePage() {
         </ActionForm>
       </Panel>
 
+      {swapped.replaced > 0 && (
+        <p className="rounded-lg bg-sun-soft px-3 py-2 text-sm font-semibold">
+          ↻ Just replaced {swapped.replaced} rejected question{swapped.replaced === 1 ? "" : "s"} on upcoming days (marked below).
+        </p>
+      )}
+      {swapped.stuck > 0 && (
+        <p className="rounded-lg bg-coral-soft px-3 py-2 text-sm font-semibold">
+          {swapped.stuck} rejected question{swapped.stuck === 1 ? "" : "s"} couldn&apos;t be replaced: no approved questions left. Generate or approve more.
+        </p>
+      )}
       <h2 className="font-display text-xl font-extrabold">Upcoming</h2>
       {upcoming.length === 0 && <p className="text-ink-soft">Nothing scheduled.</p>}
       {upcoming.map((c) => (
@@ -65,7 +77,12 @@ export default async function SchedulePage() {
               <li key={q.position} className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2 first:border-0 first:pt-0">
                 <span className="min-w-0 flex-1">
                   <strong>Q{q.position}.</strong> {q.prompt} <span className="text-ink-soft">→ {formatValue(q.answer, types.get(q.questionId) ?? "ratio")} {q.unit} · {q.category} · {q.difficulty} · <em>{TYPE_INFO[q.type].label}</em></span>
-                  {q.status !== "approved" && c.status === "scheduled" && <span className="ml-1"><Badge tone="warning">{`now ${q.status} — will be replaced at publish`}</Badge></span>}
+                  {q.replaced && (
+                    <span className="mt-1 block text-xs text-ink-soft">
+                      <Badge tone="scheduled">↻ replaced</Badge> was: {q.replaced.prompt}
+                    </span>
+                  )}
+                  {q.status !== "approved" && c.status === "scheduled" && <span className="ml-1"><Badge tone="warning">{`now ${q.status} — re-approve it, or it's swapped out when the day goes live`}</Badge></span>}
                   {q.voided && <span className="ml-1"><Badge tone="rejected">voided</Badge></span>}
                 </span>
                 {c.status === "scheduled" && pool.length > 0 && (

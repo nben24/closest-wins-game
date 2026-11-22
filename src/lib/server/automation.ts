@@ -5,7 +5,7 @@ import { addDays } from "@/lib/time";
 import { getSettings } from "@/lib/server/admin/settings";
 import { advanceJob, createJob, monthlyUsage, runnableJobIds } from "@/lib/server/ai/pipeline";
 import { getAiProvider } from "@/lib/server/ai/provider";
-import { fillSchedule, getPlayableChallenge, inventoryStatus, today } from "@/lib/server/challenges";
+import { replaceRemovedScheduled, fillSchedule, getPlayableChallenge, inventoryStatus, today } from "@/lib/server/challenges";
 import { getDb } from "@/lib/db";
 import { notifyAdmin } from "@/lib/server/notify";
 import { pruneRateLimits } from "@/lib/server/ratelimit";
@@ -21,6 +21,9 @@ export async function runDailyMaintenance(budgetMs = 240_000): Promise<Record<st
   const log: Record<string, unknown> = {};
   const s = await getSettings();
   const t = today();
+
+  // Swap out rejected/archived questions before anything is published.
+  log.replaced = (await replaceRemovedScheduled()).replaced;
 
   const ch = await getPlayableChallenge(t);
   log.todayPublished = Boolean(ch);

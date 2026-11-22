@@ -154,3 +154,38 @@ export function orderSet(set: PoolQuestion[]): PoolQuestion[] {
   for (let i = 0; i < slots.length; i++) if (!slots[i]) slots[i] = rest.shift()!;
   return slots as PoolQuestion[];
 }
+
+/**
+ * Pick one replacement for a slot in an already-scheduled day (pure).
+ * Prefers, in order: the same difficulty; a type family and category the rest
+ * of the day doesn't have; a type family the surrounding days (±3) didn't use;
+ * and never a near-duplicate of the day's other questions or nearby days'.
+ * Falls back step by step so a day can always be filled if the pool has anything.
+ */
+export function pickReplacement(
+  pool: PoolQuestion[],
+  opts: { difficulty: PoolQuestion["difficulty"]; day: PoolQuestion[]; nearby?: NearbyQuestion[]; date?: string; seed: string },
+): PoolQuestion | null {
+  if (!pool.length) return null;
+  const rand = seededRandom(opts.seed);
+  const nearby = opts.nearby ?? [];
+  const dayFamilies = new Set(opts.day.map((q) => familyOf(q.type)));
+  const dayCats = new Set(opts.day.map((q) => q.category));
+  const nearFamilies = new Set(
+    nearby.filter((r) => r.type && (!opts.date || !r.date || dayGap(r.date, opts.date) <= 3)).map((r) => familyOf(r.type!)),
+  );
+  const ordered = [...pool].sort((a, b) => a.id.localeCompare(b.id)).map((q) => ({ q, r: rand() })).sort((a, b) => a.r - b.r).map((x) => x.q);
+  const tests: ((q: PoolQuestion) => boolean)[] = [
+    (q) => q.difficulty === opts.difficulty && !dayFamilies.has(familyOf(q.type)) && !dayCats.has(q.category) && !nearFamilies.has(familyOf(q.type)),
+    (q) => q.difficulty === opts.difficulty && !dayFamilies.has(familyOf(q.type)) && !dayCats.has(q.category),
+    (q) => q.difficulty === opts.difficulty && !dayFamilies.has(familyOf(q.type)),
+    (q) => q.difficulty === opts.difficulty,
+    (q) => !dayFamilies.has(familyOf(q.type)) && !(q.difficulty === "hard" && opts.day.some((d) => d.difficulty === "hard")),
+    () => true,
+  ];
+  for (const ok of tests) {
+    const hit = ordered.find((q) => ok(q) && !conflicts(q, opts.day) && !conflicts(q, nearby));
+    if (hit) return hit;
+  }
+  return ordered.find((q) => !conflicts(q, opts.day)) ?? ordered[0];
+}
