@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db";
 import { updateSettings } from "@/lib/server/admin/settings";
-import { advanceJob, createJob, decide, setSourceCheckerForTests } from "@/lib/server/ai/pipeline";
+import { advanceJob, createJob, decide, setSourceCheckerForTests, sourceExactAnswer } from "@/lib/server/ai/pipeline";
 import { setAiProviderForTests, type AiProvider, type CallUsage } from "@/lib/server/ai/provider";
 import type { Proposal, Research } from "@/lib/server/ai/schemas";
 import { eligiblePool } from "@/lib/server/challenges";
@@ -78,6 +78,34 @@ describe("generation pipeline", () => {
     // The demo bank is full of "what year" and "how many" questions: they are crowded, not planned.
     expect(first.crowdedTypes).toContain("year");
     expect(first.typePlan).not.toContain("year");
+  });
+
+  it("uses the source's exact figure instead of the writer's rounded one", async () => {
+    const corolla = proposal({ prompt: "How many pounds does a 2024 base-model Toyota Corolla sedan weigh?", answer: 3000, unit: "pounds", scoring_type: "ratio", tolerance: 1.5, question_type: "weight", subject: "corolla weight" });
+    const checked: number[] = [];
+    setSourceCheckerForTests(async (_url, _excerpt, answer) => {
+      checked.push(answer);
+      return supported;
+    });
+    setAiProviderForTests(new FakeProvider([corolla], () => research({ value_in_source: 2955, unit_in_source: "lbs", excerpt: "Curb Weight | 2,955 lbs." })));
+    await advanceJob(await createJob(params, "admin"), 10_000);
+    const q = await db.one<{ answer: number; verification_notes: { message: string }[] }>("select answer, verification_notes from questions where provenance = 'ai'");
+    expect(q!.answer).toBe(2955);
+    expect(checked).toEqual([2955]); // the page is checked for the exact figure
+    expect(q!.verification_notes.map((n) => n.message).join(" ")).toContain("writer had proposed 3000");
+  });
+
+  it("only swaps in the source's number when it's close and the evidence is clean", () => {
+    const base = proposal({ answer: 3000, scoring_type: "ratio" });
+    expect(sourceExactAnswer(base, research({ value_in_source: 2955 }))).toBe(2955);
+    expect(sourceExactAnswer(proposal({ answer: 190, scoring_type: "ratio" }), research({ value_in_source: 189.99 }))).toBe(189.99);
+    expect(sourceExactAnswer(proposal({ answer: 80.7, scoring_type: "percent" }), research({ value_in_source: 80.0 }))).toBe(80);
+    expect(sourceExactAnswer(base, research({ value_in_source: 2000 }))).toBeNull(); // real disagreement: hold for review
+    expect(sourceExactAnswer(base, research({ value_in_source: 2955, verdict: "unclear" }))).toBeNull();
+    expect(sourceExactAnswer(base, research({ value_in_source: 2955, matches_wording: false }))).toBeNull();
+    expect(sourceExactAnswer(base, research({ value_in_source: 2955, conflicting_sources: true }))).toBeNull();
+    expect(sourceExactAnswer(proposal({ answer: 1955, scoring_type: "year" }), research({ value_in_source: 1954 }))).toBeNull();
+    expect(sourceExactAnswer(base, research({ value_in_source: 3000 }))).toBeNull(); // already matches
   });
 
   it("accepts well-supported candidates into the review queue (not auto-published)", async () => {

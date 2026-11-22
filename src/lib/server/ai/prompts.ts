@@ -40,7 +40,8 @@ What makes a great question:
   roof vs. to the tip, US launch vs. first launch anywhere) must match the evidence exactly.
 - Don't hinge on a precise official figure ("per the 2020 survey"): prefer facts where close is clearly good enough.
 - Stable facts that won't change soon. Avoid "currently"/"this year" unless a reference period is given.
-- Rounding appropriate to the evidence; no artificial precision for uncertain estimates.
+- Use the exact figure the source states (2,955 pounds, $189.99, 124 minutes), never a rounded version: players
+  who look it up later should see the same number. Round only when the source itself gives an estimate ("about 2,000 steps").
 - Family friendly: no violence, deaths, disasters, alcohol, drugs, gambling, weapons, sex, or politics.
 - No celebrity net worth, salaries or other unsupported estimates.
 - Spread the fame around: don't lean on the same handful of superstars (Michael Jordan, Michael Phelps,

@@ -442,6 +442,25 @@ function proposalToDraft(p: Proposal, r?: Research | null): QuestionDraft {
 
 const LOW_QUALITY_DOMAINS = /(^|\.)(quora\.com|reddit\.com|pinterest\.[a-z.]+|answers\.com|fandom\.com|medium\.com|tiktok\.com|facebook\.com|x\.com|twitter\.com|youtube\.com|blogspot\.com|wordpress\.com)$/i;
 
+/**
+ * The source's exact number, when it should replace the writer's (rounded)
+ * answer: the fact-checker found clean support for this exact wording, read the
+ * number straight off the page (not computed), and it's within 10% of the
+ * writer's answer. Bigger gaps are real disagreements and stay held for review.
+ * Years are never swapped (a different year is a different fact). Pure.
+ */
+export function sourceExactAnswer(p: Proposal, r: Research): number | null {
+  const v = r.value_in_source;
+  if (v === null || v === undefined || !Number.isFinite(v) || v === p.answer) return null;
+  if (p.scoring_type === "year") return null;
+  if (r.verdict !== "supported" || !r.matches_wording || r.is_ambiguous || r.conflicting_sources) return null;
+  if (r.combine && r.combine !== "none") return null;
+  if (!p.allow_negative && v < 0) return null;
+  if (p.scoring_type === "percent" && (v < 0 || v > 100)) return null;
+  const gap = Math.abs(v - p.answer) / Math.max(Math.abs(p.answer), Math.abs(v), 1e-9);
+  return gap <= 0.1 ? v : null;
+}
+
 function valuesMatch(expected: number, found: number | null): boolean {
   if (found === null || !Number.isFinite(found)) return false;
   if (expected === found) return true;
@@ -582,7 +601,7 @@ async function relaxedCheck(job: JobRow, c: CandidateRow, research: Research, s:
 
 async function verifyCandidate(job: JobRow, c: CandidateRow, s: AppSettings, provider: AiProvider): Promise<void> {
   const db = await getDb();
-  const p = c.proposal;
+  let p = c.proposal;
   await db.query("update generation_candidates set attempts = attempts + 1, updated_at = now() where id = $1", [c.id]);
   await setJob(job.id, { progress_note: `Checking: "${p.prompt.slice(0, 80)}"` });
 
@@ -624,10 +643,21 @@ async function verifyCandidate(job: JobRow, c: CandidateRow, s: AppSettings, pro
     return; // otherwise stays 'proposed' and is retried on a later step
   }
 
+  const originalAnswer = p.answer;
+  // The writer works from memory and rounds (3,000 lb); the fact-checker reads
+  // the page (2,955 lb). When they're close and the evidence is clean, use the
+  // source's exact figure so a player who looks it up gets full points.
+  const sourceAnswer = sourceExactAnswer(p, research);
+  if (sourceAnswer !== null) {
+    p = { ...p, answer: sourceAnswer, allow_decimal: p.allow_decimal || !Number.isInteger(sourceAnswer) };
+    c = { ...c, proposal: p };
+  }
+
   const source = research.source_url && research.excerpt
     ? await sourceChecker(research.source_url, research.excerpt, p.answer)
     : ({ status: "invalid_url", detail: "The research step returned no source URL or excerpt.", checkedAt: now().toISOString() } as SourceCheck);
   const d = decide(p, research, source, dupHits);
+  if (sourceAnswer !== null) d.reasons.unshift(`Answer set to the source's exact figure (${sourceAnswer}); the writer had proposed ${originalAnswer}.`);
   if (d.status === "held" && s.autoApprove && s.approvalMode === "relaxed") {
     const why = await relaxedCheck(job, c, research, s, provider);
     if (why === null) {
